@@ -1,31 +1,47 @@
-/* Custom CSS cho HRM Thăng Long Group */
+/* ==========================================
+   CSS RIÊNG CHO HỆ THỐNG HRM THĂNG LONG GROUP
+   ========================================== */
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   color: #333;
+  background-color: #f8f9fa;
 }
 
+/* Khung màn hình đăng nhập canh giữa gọn gàng */
 .login-container {
   max-width: 450px;
 }
 
 .card {
   border-radius: 8px;
+  border: none;
 }
 
+/* Định dạng tiêu đề cột trong bảng */
 .table th {
   font-weight: 600;
   text-transform: uppercase;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   letter-spacing: 0.5px;
+  background-color: #f1f3f5 !important;
+  color: #495057;
 }
 
+/* Khoảng cách chữ và độ rộng bảng */
+.table td {
+  vertical-align: middle;
+  font-size: 0.92rem;
+}
+
+/* Định dạng các thẻ Badge trạng thái và phân quyền */
 .badge {
   font-weight: 500;
   padding: 0.5em 0.75em;
+  font-size: 0.78rem;
 }
 
-/* Đảm bảo bảng không bị tràn giao diện di động */
+/* Đảm bảo bảng hiển thị mượt mà trên mọi thiết bị */
 .table-responsive {
-  min-height: 200px;
+  min-height: 250px;
 }
