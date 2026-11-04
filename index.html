@@ -1,131 +1,115 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HRM | THĂNG LONG GROUP</title>
-  <!-- Bootstrap 5 CSS -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <!-- Style CSS riêng của dự án -->
-  <link rel="stylesheet" href="./assets/css/style.css">
-  <!-- Supabase JS SDK -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <!-- SheetJS (xlsx) để xuất file Excel -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ thống Quản trị Nhân sự TLG (HRM)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="./css/style.css">
 </head>
-<body class="bg-light">
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen">
 
-  <!-- ================= MÀN HÌNH ĐĂNG NHẬP ================= -->
-  <div class="container py-5 login-container" id="login-section">
-    <div class="card shadow-sm border-0">
-      <div class="card-body p-4">
-        <h3 class="card-title text-center mb-4 text-primary fw-bold">HRM TLG LOGIN</h3>
-        <form id="login-form">
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Email công việc</label>
-            <input type="email" id="email" class="form-control" placeholder="user@company.com" required>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Mật khẩu</label>
-            <input type="password" id="password" class="form-control" required>
-          </div>
-          <button type="submit" class="btn btn-primary w-100 fw-bold">Đăng nhập</button>
-        </form>
-        <div id="login-alert" class="mt-3"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ================= MÀN HÌNH CHÍNH (SAU KHI ĐĂNG NHẬP) ================= -->
-  <div class="container py-4 d-none" id="app-section">
-    <!-- THANH HEADER -->
-    <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
-      <h4 class="text-primary mb-0 fw-bold">HỆ THỐNG QUẢN LÝ NHÂN SỰ - THĂNG LONG GROUP</h4>
-      <div>
-        <span id="user-info" class="me-3 fw-semibold text-secondary"></span>
-        <button id="logout-btn" class="btn btn-outline-danger btn-sm">Đăng xuất</button>
-      </div>
-    </div>
-
-    <!-- KHU VỰC BẢNG NHÂN SỰ -->
-    <div class="card shadow-sm mb-4">
-      <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
-        <h5 class="mb-0 text-dark fw-bold">📋 Danh Sách Nhân Sự</h5>
-        <div>
-          <button class="btn btn-primary btn-sm fw-bold me-2" data-bs-toggle="modal" data-bs-target="#addEmployeeModal">➕ Thêm nhân viên</button>
-          <button id="export-excel-btn" class="btn btn-success btn-sm fw-bold">📥 Xuất File Excel</button>
+    <!-- Header Navigation -->
+    <header class="bg-slate-900 text-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <span class="text-2xl font-bold text-blue-400">TLG</span>
+                <span class="text-slate-400">|</span>
+                <span class="text-lg font-medium">Hệ Thống Quản Trị Nhân Sự</span>
+            </div>
+            <!-- Switch Portal / Navigation Roles -->
+            <div class="flex space-x-2 bg-slate-800 p-1 rounded-lg">
+                <button id="btn-ess" onclick="switchPortal('ESS')" class="px-4 py-1.5 rounded-md text-sm font-semibold transition bg-blue-600 text-white shadow">
+                    [ESS] Cá Nhân
+                </button>
+                <button id="btn-mss" onclick="switchPortal('MSS')" class="px-4 py-1.5 rounded-md text-sm font-semibold transition text-slate-300 hover:text-white">
+                    [MSS] Quản Lý
+                </button>
+                <button id="btn-hrm" onclick="switchPortal('HRM')" class="px-4 py-1.5 rounded-md text-sm font-semibold transition text-slate-300 hover:text-white">
+                    /Quản trị
+                </button>
+            </div>
         </div>
-      </div>
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-              <tr>
-                <th class="ps-3">Mã NV (00000)</th>
-                <th>Họ và Tên</th>
-                <th>Email</th>
-                <th>Phân quyền</th>
-                <th>Chức danh</th>
-                <th>Trạng thái</th>
-              </tr>
-            </thead>
-            <tbody id="employee-table-body">
-              <tr>
-                <td colspan="6" class="text-center text-muted py-4">Đang tải dữ liệu nhân sự...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
+    </header>
 
-  <!-- ================= MODAL THÊM NHÂN SỰ MỚI ================= -->
-  <div class="modal fade" id="addEmployeeModal" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title fw-bold text-primary">Thêm Nhân Sự Mới (Mã 5 chữ số)</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    <!-- Main Content Area -->
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        
+        <!-- Status Indicator -->
+        <div class="mb-6 p-4 rounded-xl border bg-white shadow-sm flex justify-between items-center">
+            <div>
+                <span class="text-sm font-medium text-slate-500">Trạng thái kết nối Database:</span>
+                <span id="db-status" class="ml-2 font-bold text-amber-500">Đang kiểm tra kết nối...</span>
+            </div>
+            <div id="portal-badge" class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-bold uppercase">
+                Giao diện: ESS
+            </div>
         </div>
-        <div class="modal-body">
-          <form id="add-employee-form">
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Mã nhân viên (5 chữ số: 00001, 00002...)</label>
-              <input type="text" id="new-emp-code" class="form-control" maxlength="5" placeholder="Để trống sẽ tự sinh tuần tự">
-            </div>
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Họ và Tên</label>
-              <input type="text" id="new-emp-name" class="form-control" required placeholder="Nguyễn Văn A">
-            </div>
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Email công việc (Đăng nhập)</label>
-              <input type="email" id="new-emp-email" class="form-control" required placeholder="user@company.com">
-            </div>
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Mật khẩu ban đầu</label>
-              <input type="password" id="new-emp-password" class="form-control" required placeholder="Ít nhất 6 ký tự">
-            </div>
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Phân quyền (Role)</label>
-              <select id="new-emp-role" class="form-select">
-                <option value="EMPLOYEE">Nhân viên (EMPLOYEE)</option>
-                <option value="MANAGER">Quản lý (MANAGER)</option>
-                <option value="CB">C&B / Nhân sự (CB)</option>
-                <option value="BGD">Ban Giám Đốc (BGD)</option>
-              </select>
-            </div>
-            <button type="submit" class="btn btn-primary w-100 fw-bold">Lưu nhân sự</button>
-          </form>
-          <div id="add-emp-alert" class="mt-3"></div>
-        </div>
-      </div>
-    </div>
-  </div>
 
-  <!-- Bootstrap JS Bundle (Cần cho Modal hoạt động) -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <!-- File Javascript logic chính -->
-  <script src="./assets/js/app.js"></script>
+        <!-- ESS Portal Section -->
+        <section id="portal-ess" class="portal-section space-y-6">
+            <h2 class="text-2xl font-bold text-slate-900">Giao Diện Nhân Viên (ESS)</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white p-6 rounded-xl shadow-sm border hover:shadow-md transition tlg-card">
+                    <h3 class="font-bold text-lg text-slate-800 mb-2">Thông Tin Cá Nhân</h3>
+                    <p class="text-slate-600 text-sm mb-4">Tra cứu lý lịch, hợp đồng lao động và quá trình công tác.</p>
+                    <button class="w-full py-2 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200">Xem Hồ Sơ</button>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm border hover:shadow-md transition tlg-card">
+                    <h3 class="font-bold text-lg text-slate-800 mb-2">Phiếu Lương & Chấm Công</h3>
+                    <p class="text-slate-600 text-sm mb-4">Xem chi tiết bảng lương hằng tháng và công nhật làm việc.</p>
+                    <button class="w-full py-2 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200">Xem Phiếu Lương</button>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm border hover:shadow-md transition tlg-card">
+                    <h3 class="font-bold text-lg text-slate-800 mb-2">Đăng Ký Nghỉ Phép / Tăng Ca</h3>
+                    <p class="text-slate-600 text-sm mb-4">Gửi đơn nghỉ phép năm, đăng ký tăng ca hoặc đi trễ về sớm.</p>
+                    <button class="w-full py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700">Tạo Đăng Ký</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- MSS Portal Section -->
+        <section id="portal-mss" class="portal-section space-y-6 hidden">
+            <h2 class="text-2xl font-bold text-slate-900">Giao Diện Quản Lý (MSS)</h2>
+            <div class="bg-white p-6 rounded-xl shadow-sm border">
+                <p class="text-slate-600">Dành cho Cấp Quản lý duyệt đơn nghỉ phép, tăng ca, bổ sung giờ vào/ra và theo dõi thông tin đội ngũ trực thuộc.</p>
+            </div>
+        </section>
+
+        <!-- HRM Admin Portal Section -->
+        <section id="portal-hrm" class="portal-section space-y-6 hidden">
+            <h2 class="text-2xl font-bold text-slate-900">Giao Diện Quản Trị Hệ Thống (/HRM)</h2>
+            
+            <!-- Dynamic Data Display: Legal Entities -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border">
+                <h3 class="font-bold text-lg text-slate-800 mb-4">Danh Sách Pháp Nhân Trong Tập Đoàn TLG</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b">
+                                <th class="p-3 font-semibold text-slate-600">ID</th>
+                                <th class="p-3 font-semibold text-slate-600">Mã Pháp Nhân</th>
+                                <th class="p-3 font-semibold text-slate-600">Tên Công Ty / Pháp Nhân</th>
+                            </tr>
+                        </thead>
+                        <tbody id="entities-table-body">
+                            <tr>
+                                <td colspan="3" class="p-4 text-center text-slate-400">Đang tải dữ liệu từ Database...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Load Modular JS Scripts -->
+    <script src="./js/supabase.js"></script>
+    <script src="./js/app.js"></script>
 </body>
 </html>
