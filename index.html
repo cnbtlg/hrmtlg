@@ -25,7 +25,7 @@
             <!-- Khu vực giả lập vai trò đăng nhập (Dùng cho kiểm tra phân quyền MSS/ESS) -->
             <div class="flex items-center space-x-3">
                 <div class="text-xs text-slate-300 hidden md:block">
-                    Vai trò hiện tại: <span id="current-user-role-label" class="font-bold text-amber-400">Nhân viên (ESS)</span>
+                    Vai trò hiện tại: <span id="current-user-role-label" class="font-bold text-amber-400">Chuyên viên C&B (00608)</span>
                 </div>
                 <div class="flex space-x-2 bg-slate-800 p-1 rounded-lg">
                     <button id="btn-ess" onclick="switchPortal('ESS')" class="px-3 py-1.5 rounded-md text-xs font-semibold transition bg-blue-600 text-white shadow">
@@ -54,7 +54,9 @@
             <div class="flex items-center space-x-3">
                 <span class="text-xs font-semibold text-slate-600">Chọn ngữ cảnh test quyền:</span>
                 <select id="mock-role-selector" onchange="changeMockRole(this.value)" class="px-2 py-1 border rounded text-xs bg-slate-50 font-medium">
-                    <option value="ESS">Nhân viên thông thường (ESS)</option>
+                    <option value="MSS_ADMIN_CB">NV 00608 - Tam Thanh Tuấn (C&B Admin)</option>
+                    <option value="ESS_608">NV 00608 - Tam Thanh Tuấn (ESS)</option>
+                    <option value="ESS">Nhân viên thông thường khác (ESS)</option>
                     <option value="MSS_MANAGER">Quản lý trực tiếp (MSS)</option>
                     <option value="MSS_ADMIN_LK">Admin Nhà máy LK (Luyện Kim)</option>
                     <option value="MSS_ADMIN_MD">Admin Nhà máy MD (Môi Trường)</option>
@@ -272,7 +274,7 @@
                 <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1">Chọn nhân sự thuộc phạm vi quản lý:</label>
                     <select id="admin-target-emp" required class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
-                        <option value="">-- Chọn nhân viên --</option>
+                        <option value="">-- Chọn nhân viên trong phạm vi --</option>
                     </select>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
