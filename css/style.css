@@ -1,0 +1,16 @@
+/* ==========================================================================
+   TLG HRM SYSTEM - CUSTOM STYLESHEET
+   ========================================================================== */
+
+body {
+    background-color: #f8fafc;
+}
+
+/* Hiệu ứng chuyển động mượt cho các card chức năng */
+.tlg-card {
+    transition: all 0.2s ease-in-out;
+}
+
+.tlg-card:hover {
+    transform: translateY(-2px);
+}
