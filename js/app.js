@@ -60,7 +60,6 @@ async function loadLegalEntities() {
 async function loadEmployees() {
     const tbody = document.getElementById('employees-table-body');
     try {
-        // Query kết hợp Hợp đồng, Nhân sự, Pháp nhân và Cấu trúc lương
         const { data, error } = await _supabase
             .from('employee_contracts')
             .select(`
@@ -73,27 +72,58 @@ async function loadEmployees() {
             .order('employee_id');
 
         if (error) throw error;
-        window._tlgEmployees = data;
+        window._tlgEmployees = data; // Lưu cache toàn bộ nhân sự để lọc
 
-        if (data && data.length > 0) {
-            tbody.innerHTML = data.map((item, index) => `
-                <tr class="border-b hover:bg-slate-50">
-                    <td class="p-3 font-mono font-bold text-blue-600">${item.employees?.employee_id}</td>
-                    <td class="p-3 font-medium text-slate-800">${item.employees?.full_name}</td>
-                    <td class="p-3"><span class="px-2 py-1 bg-slate-100 text-slate-700 rounded font-bold text-xs">${item.legal_entities?.entity_code}</span></td>
-                    <td class="p-3 text-slate-700">${item.job_title}</td>
-                    <td class="p-3 text-slate-600">${item.department_name}</td>
-                    <td class="p-3">
-                        <button onclick="viewEmployeeDetail(${index})" class="px-3 py-1 bg-blue-50 text-blue-600 rounded font-semibold hover:bg-blue-100 text-xs">Xem Chi Tiết & Lương</button>
-                    </td>
-                </tr>
-            `).join('');
-        } else {
-            tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">Chưa có dữ liệu nhân sự.</td></tr>';
-        }
+        renderEmployeesTable(data);
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-rose-500">Lỗi khi tải dữ liệu: ${err.message}</td></tr>`;
     }
+}
+
+// Render bảng danh sách nhân sự
+function renderEmployeesTable(data) {
+    const tbody = document.getElementById('employees-table-body');
+    if (data && data.length > 0) {
+        tbody.innerHTML = data.map((item, index) => {
+            // Tìm index thực tế trong mảng gốc window._tlgEmployees
+            const originalIndex = window._tlgEmployees.findIndex(e => e.contract_id === item.contract_id);
+            return `
+                <tr class="border-b hover:bg-slate-50">
+                    <td class="p-3 font-mono font-bold text-blue-600">${item.employees?.employee_id || 'N/A'}</td>
+                    <td class="p-3 font-medium text-slate-800">${item.employees?.full_name || 'N/A'}</td>
+                    <td class="p-3"><span class="px-2 py-1 bg-slate-100 text-slate-700 rounded font-bold text-xs">${item.legal_entities?.entity_code || 'N/A'}</span></td>
+                    <td class="p-3 text-slate-700">${item.job_title || 'N/A'}</td>
+                    <td class="p-3 text-slate-600">${item.department_name || 'N/A'}</td>
+                    <td class="p-3">
+                        <button onclick="viewEmployeeDetail(${originalIndex})" class="px-3 py-1 bg-blue-50 text-blue-600 rounded font-semibold hover:bg-blue-100 text-xs">Xem Chi Tiết & Lương</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } else {
+        tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">Không tìm thấy nhân sự phù hợp.</td></tr>';
+    }
+}
+
+// Xử lý tìm kiếm và lọc danh sách nhân sự
+function filterEmployees() {
+    const keyword = document.getElementById('search-input').value.toLowerCase().trim();
+    const selectedEntity = document.getElementById('filter-entity').value;
+
+    if (!window._tlgEmployees) return;
+
+    const filtered = window._tlgEmployees.filter(item => {
+        const empId = (item.employees?.employee_id || '').toLowerCase();
+        const fullName = (item.employees?.full_name || '').toLowerCase();
+        const entityCode = item.legal_entities?.entity_code || '';
+
+        const matchKeyword = empId.includes(keyword) || fullName.includes(keyword);
+        const matchEntity = selectedEntity === '' || entityCode === selectedEntity;
+
+        return matchKeyword && matchEntity;
+    });
+
+    renderEmployeesTable(filtered);
 }
 
 // Xem chi tiết hồ sơ & biểu lương C&B trong Modal
