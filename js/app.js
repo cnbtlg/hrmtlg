@@ -1,5 +1,5 @@
 // ==========================================================================
-// TLG HRM - APPLICATION LOGIC, EXCEL TEMPLATE, EXPORT/IMPORT & RECURSIVE PERMISSIONS
+// TLG HRM - APPLICATION LOGIC, PROPOSALS, EXCEL & RECURSIVE PERMISSIONS
 // ==========================================================================
 
 window._tlgSession = {
@@ -9,7 +9,6 @@ window._tlgSession = {
     scope: 'ALL'
 };
 
-// Hàm chuẩn hóa chuỗi ngày từ YYYY-MM-DD hoặc ISO sang DD-MM-YYYY
 function formatDateVN(dateStr) {
     if (!dateStr) return 'N/A';
     const cleanDate = String(dateStr).split('T')[0];
@@ -73,6 +72,7 @@ function switchPortal(portal) {
         loadEmployees();
     } else if (portal === 'MSS') {
         loadMSSLeaveRequests();
+        loadMSSProposals();
     }
 }
 
@@ -232,7 +232,7 @@ function closeEmployeeModal() {
 }
 
 // ==========================================================================
-// CÔNG CỤ EXPORT / IMPORT EXCEL & TẢI FILE MẪU CHUẨN (SHEETJS)
+// CÔNG CỤ EXPORT / IMPORT EXCEL & TẢI FILE MẪU CHUẨN
 // ==========================================================================
 
 function downloadExcelTemplate() {
@@ -318,17 +318,16 @@ function importMasterDataExcel(event) {
             const jsonRows = XLSX.utils.sheet_to_json(worksheet);
 
             if (!jsonRows || jsonRows.length === 0) {
-                alert('File Excel không có dữ liệu hoặc định dạng không đúng!');
+                alert('File Excel không có dữ liệu!');
                 return;
             }
 
-            if (confirm(`Đã đọc thành công ${jsonRows.length} dòng từ file Excel. Bạn có muốn đồng bộ dữ liệu vào hệ thống không?`)) {
+            if (confirm(`Đã đọc thành công ${jsonRows.length} dòng từ file Excel. Bạn có muốn đồng bộ dữ liệu không?`)) {
                 let countSuccess = 0;
                 for (let row of jsonRows) {
                     const empId = String(row["Mã NV"] || '').trim();
                     if (!empId) continue;
 
-                    // Xử lý chuyển ngược ngày sinh DD-MM-YYYY về YYYY-MM-DD để lưu database
                     let rawDob = row["Ngày Sinh (DD-MM-YYYY)"] || row["Ngày Sinh"] || '';
                     let dbDob = null;
                     if (rawDob) {
@@ -355,17 +354,219 @@ function importMasterDataExcel(event) {
                     countSuccess++;
                 }
 
-                alert(`Đã đồng bộ thành công ${countSuccess} hồ sơ nhân sự từ Excel lên hệ thống!`);
+                alert(`Đã đồng bộ thành công ${countSuccess} hồ sơ nhân sự!`);
                 loadEmployees();
             }
         } catch (err) {
             console.error(err);
-            alert('Lỗi khi đọc hoặc import file Excel: ' + err.message);
+            alert('Lỗi import file Excel: ' + err.message);
         } finally {
             event.target.value = '';
         }
     };
     reader.readAsArrayBuffer(file);
+}
+
+// ==========================================================================
+// MODULE QUẢN LÝ ĐỀ XUẤT LƯƠNG 3P & TRÌNH KÝ HĐLĐ (MSS)
+// ==========================================================================
+
+function openProposalModal() {
+    if (window._tlgSession.role === 'ESS_608') {
+        alert('Tài khoản ESS cá nhân không có quyền tạo đề xuất!');
+        return;
+    }
+    document.getElementById('proposal-modal').classList.remove('hidden');
+    loadProposalTargetEmployees();
+}
+
+function closeProposalModal() {
+    document.getElementById('proposal-modal').classList.add('hidden');
+}
+
+function toggleProposalFields() {
+    const type = document.getElementById('prop-type').value;
+    const secSalary = document.getElementById('section-salary-3p');
+    const secContract = document.getElementById('section-contract');
+
+    if (type === 'SALARY_3P') {
+        secSalary.classList.remove('hidden');
+        secContract.classList.add('hidden');
+    } else {
+        secSalary.classList.add('hidden');
+        secContract.classList.remove('hidden');
+    }
+}
+
+async function loadProposalTargetEmployees() {
+    const select = document.getElementById('prop-target-emp');
+    const isSuperAdmin = (window._tlgSession.role === 'MSS_ADMIN_CB' || window._tlgSession.role === 'HRM' || window._tlgSession.employeeId === '00608');
+
+    try {
+        let query = _supabase.from('employee_contracts').select(`
+            employee_id,
+            department_name,
+            employees ( employee_id, full_name )
+        `).eq('is_active', true);
+
+        if (!isSuperAdmin) {
+            const { data: treeData } = await _supabase.rpc('get_managed_employee_ids', { root_manager_id: window._tlgSession.employeeId });
+            const allowedIds = treeData ? treeData.map(t => t.employee_id) : [];
+            query = query.in('employee_id', allowedIds);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+            select.innerHTML = '<option value="">-- Chọn nhân viên trong cây quản lý --</option>' + 
+                data.map(item => {
+                    const emp = item.employees;
+                    if (!emp) return '';
+                    return `<option value="${emp.employee_id}">${emp.employee_id} - ${emp.full_name} (${item.department_name || 'N/A'})</option>`;
+                }).join('');
+        } else {
+            select.innerHTML = '<option value="">Không có nhân sự thuộc phạm vi quản lý</option>';
+        }
+    } catch (err) {
+        console.error("Lỗi nạp danh sách:", err);
+    }
+}
+
+async function submitProposal(event) {
+    event.preventDefault();
+    const type = document.getElementById('prop-type').value;
+    const targetEmpId = document.getElementById('prop-target-emp').value;
+    const reason = document.getElementById('prop-reason').value;
+
+    const payload = {
+        proposal_type: type,
+        employee_id: targetEmpId,
+        proposed_by: window._tlgSession.employeeId,
+        reason: reason,
+        status: 'PENDING'
+    };
+
+    if (type === 'SALARY_3P') {
+        payload.proposed_base_salary = Number(document.getElementById('prop-base-salary').value || 0);
+        payload.proposed_allowance_position = Number(document.getElementById('prop-allowance-pos').value || 0);
+    } else {
+        payload.contract_type = document.getElementById('prop-contract-type').value;
+        payload.effective_date = document.getElementById('prop-effective-date').value || null;
+    }
+
+    try {
+        const { error } = await _supabase.from('hr_proposals').insert([payload]);
+        if (error) throw error;
+
+        alert('Tạo đề xuất / trình ký thành công! Đơn đã chuyển tới C&B Admin thẩm định.');
+        document.getElementById('proposal-form').reset();
+        closeProposalModal();
+        loadMSSProposals();
+    } catch (err) {
+        alert('Lỗi tạo đề xuất: ' + err.message);
+    }
+}
+
+async function loadMSSProposals() {
+    const tbody = document.getElementById('mss-proposals-body');
+    if (!tbody) return;
+
+    const isSuperAdmin = (window._tlgSession.role === 'MSS_ADMIN_CB' || window._tlgSession.role === 'HRM' || window._tlgSession.employeeId === '00608');
+
+    try {
+        let query = _supabase.from('hr_proposals').select(`*, employees ( full_name, employee_id )`).order('created_at', { ascending: false });
+
+        if (!isSuperAdmin) {
+            const { data: treeData } = await _supabase.rpc('get_managed_employee_ids', { root_manager_id: window._tlgSession.employeeId });
+            const allowedIds = treeData ? treeData.map(t => t.employee_id) : [];
+            allowedIds.push(window._tlgSession.employeeId);
+            query = query.in('employee_id', allowedIds);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+            tbody.innerHTML = data.map(item => {
+                const formatMoney = (val) => val ? Number(val).toLocaleString('vi-VN') + ' VNĐ' : '0 VNĐ';
+                const isSalary = item.proposal_type === 'SALARY_3P';
+                
+                let detailsStr = '';
+                if (isSalary) {
+                    detailsStr = `Lương chính mới: <strong>${formatMoney(item.proposed_base_salary)}</strong><br>PC Trách nhiệm: <strong>${formatMoney(item.proposed_allowance_position)}</strong>`;
+                } else {
+                    detailsStr = `HĐLĐ trình ký: <strong>${item.contract_type}</strong><br>Hiệu lực: <strong>${formatDateVN(item.effective_date)}</strong>`;
+                }
+
+                let actionButtons = '';
+                if (item.status === 'PENDING' && isSuperAdmin) {
+                    actionButtons = `
+                        <button onclick="approveProposal(${item.proposal_id})" class="px-2 py-1 bg-emerald-600 text-white rounded text-xs font-semibold hover:bg-emerald-700">Duyệt & Cập nhật Master</button>
+                        <button onclick="rejectProposal(${item.proposal_id})" class="px-2 py-1 bg-rose-600 text-white rounded text-xs font-semibold hover:bg-rose-700">Từ chối</button>
+                    `;
+                } else if (item.status === 'APPROVED') {
+                    actionButtons = `<span class="text-xs font-bold text-emerald-600">[Đã duyệt & Đã áp dụng]</span>`;
+                } else {
+                    actionButtons = `<span class="text-xs font-bold text-slate-400">Đang chờ C&B duyệt</span>`;
+                }
+
+                const badgeType = isSalary 
+                    ? '<span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-bold">Điều chỉnh Lương 3P</span>'
+                    : '<span class="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-bold">Trình ký HĐLĐ</span>';
+
+                return `
+                    <tr class="border-b hover:bg-slate-50">
+                        <td class="p-3">${badgeType}</td>
+                        <td class="p-3 font-mono font-bold text-slate-800">${item.employees?.employee_id} - ${item.employees?.full_name}</td>
+                        <td class="p-3 text-xs text-slate-700">${detailsStr}</td>
+                        <td class="p-3 text-xs text-slate-600">${item.reason}</td>
+                        <td class="p-3"><span class="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs font-bold">${item.status}</span></td>
+                        <td class="p-3 space-x-1">${actionButtons}</td>
+                    </tr>
+                `;
+            }).join('');
+        } else {
+            tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">Không có đề xuất nào trong phạm vi của bạn.</td></tr>';
+        }
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-rose-500">Lỗi tải đề xuất: ${err.message}</td></tr>`;
+    }
+}
+
+// C&B Duyệt đề xuất & Tự động cập nhật Master Data
+async function approveProposal(proposalId) {
+    if (confirm('Xác nhận duyệt đề xuất này? Dữ liệu lương/HĐLĐ mới sẽ được tự động cập nhật vào Master Data nhân sự.')) {
+        try {
+            const { error } = await _supabase
+                .from('hr_proposals')
+                .update({ status: 'APPROVED' })
+                .eq('proposal_id', proposalId);
+
+            if (error) throw error;
+            alert('Đã phê duyệt đề xuất thành công và tự động áp dụng vào hệ thống!');
+            loadMSSProposals();
+        } catch (err) {
+            alert('Lỗi phê duyệt: ' + err.message);
+        }
+    }
+}
+
+async function rejectProposal(proposalId) {
+    if (confirm('Xác nhận từ chối đề xuất này?')) {
+        try {
+            const { error } = await _supabase
+                .from('hr_proposals')
+                .update({ status: 'REJECTED' })
+                .eq('proposal_id', proposalId);
+
+            if (error) throw error;
+            alert('Đã từ chối đề xuất!');
+            loadMSSProposals();
+        } catch (err) {
+            alert('Lỗi khi từ chối: ' + err.message);
+        }
+    }
 }
 
 // ==========================================================================
