@@ -189,7 +189,7 @@
                 </div>
             </div>
 
-            <!-- Master Data Nhân sự & Công cụ Excel -->
+            <!-- Master Data Nhân sự & Bộ lọc Nâng cao AND/OR -->
             <div class="bg-white p-6 rounded-xl shadow-sm border space-y-4">
                 <div class="flex flex-col md:flex-row justify-between items-center gap-4 border-b pb-4">
                     <h3 class="font-bold text-lg text-slate-800">Quản Lý Master Data & Bảng Lương C&B</h3>
@@ -208,17 +208,41 @@
                     </div>
                 </div>
 
-                <div class="flex flex-col md:flex-row justify-between items-center gap-4">
-                    <input type="text" id="search-input" placeholder="Tìm theo Mã NV, Họ tên..." oninput="filterEmployees()" 
-                        class="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-64">
-                    
-                    <select id="filter-entity" onchange="filterEmployees()" class="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                        <option value="">Tất cả Pháp nhân</option>
-                        <option value="MD">MD (Môi trường Miền Đông)</option>
-                        <option value="TL">TL (Luyện Kim Thăng Long)</option>
-                        <option value="KT">KT (Kim Thăng Long)</option>
-                        <option value="XM">XM (XNK Miền Đông)</option>
-                    </select>
+                <!-- Khung Bộ Lọc Nâng Cao AND / OR -->
+                <div class="bg-slate-50 p-4 rounded-xl border space-y-3">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-bold text-slate-700 uppercase">Bộ lọc điều kiện đa chiều (AND / OR):</span>
+                        <button onclick="resetAdvancedFilter()" class="text-xs text-rose-600 font-semibold hover:underline">Xóa bộ lọc</button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-500 mb-1">Từ khóa (Mã NV / Họ tên):</label>
+                            <input type="text" id="adv-keyword" placeholder="Nhập từ khóa..." oninput="applyAdvancedFilter()" 
+                                class="w-full px-3 py-1.5 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-500 mb-1">Pháp nhân (Legal Entity):</label>
+                            <select id="adv-entity" onchange="applyAdvancedFilter()" class="w-full px-3 py-1.5 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="">-- Tất cả Pháp nhân --</option>
+                                <option value="MD">MD - Môi Trường Miền Đông</option>
+                                <option value="TL">TL - Luyện Kim Thăng Long</option>
+                                <option value="KT">KT - Kim Thăng Long</option>
+                                <option value="XM">XM - XNK Miền Đông</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-500 mb-1">Toán tử logic kết hợp:</label>
+                            <select id="adv-operator" onchange="applyAdvancedFilter()" class="w-full px-3 py-1.5 border rounded-lg text-sm bg-blue-50 text-blue-800 font-bold focus:outline-none">
+                                <option value="AND">AND (Thỏa mãn tất cả điều kiện)</option>
+                                <option value="OR">OR (Thỏa mãn bất kỳ điều kiện)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-500 mb-1">Phòng ban / Xưởng / Đội xe:</label>
+                            <input type="text" id="adv-department" placeholder="VD: Luyện Kim, Vận tải..." oninput="applyAdvancedFilter()" 
+                                class="w-full px-3 py-1.5 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                    </div>
                 </div>
 
                 <div class="overflow-x-auto">
