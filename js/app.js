@@ -1,5 +1,5 @@
 // ==========================================================================
-// TLG HRM - APPLICATION LOGIC, PORTAL & PERMISSION MANAGEMENT
+// TLG HRM - APPLICATION LOGIC, RECURSIVE PERMISSION TREE & C&B CALCULATIONS
 // ==========================================================================
 
 // Biến lưu ngữ cảnh phân quyền giả lập (Mặc định NV 00608 - Tam Thanh Tuấn - C&B Admin)
@@ -21,26 +21,26 @@ function changeMockRole(roleVal) {
     }
 
     const roleLabels = {
-        'MSS_ADMIN_CB': '00608 - Tam Thanh Tuấn (C&B Admin Toàn hệ thống)',
-        'ESS_608': '00608 - Tam Thanh Tuấn (ESS Cá nhân)',
-        'ESS': 'Nhân viên thông thường khác (ESS)',
-        'MSS_MANAGER': 'Quản lý trực tiếp (MSS)',
+        'MSS_ADMIN_CB': '00608 - Tam Thanh Tuấn (C&B Admin / Toàn quyền)',
+        'MSS_MANAGER_DIRECT': 'Quản lý Trực tiếp (Cây cấp 1)',
+        'MSS_MANAGER_SKIP': 'Quản lý Cấp cao (Cây đệ quy đa cấp)',
         'MSS_ADMIN_LK': 'Admin Nhà máy LK (Luyện Kim)',
         'MSS_ADMIN_MD': 'Admin Nhà máy MD (Môi Trường)',
-        'MSS_ADMIN_LOGISTICS': 'Admin Vận tải / Trung chuyển',
-        'HRM': 'HRM Admin Tổng'
+        'MSS_ADMIN_LOGISTICS': 'Admin Đội xe Vận tải',
+        'ESS_608': '00608 - Tam Thanh Tuấn (ESS Cá nhân)'
     };
     document.getElementById('current-user-role-label').innerText = roleLabels[roleVal] || roleVal;
     alert(`Đã chuyển ngữ cảnh quyền thành: ${roleLabels[roleVal]}`);
 }
 
 function switchPortal(portal) {
-    if (portal === 'MSS' && window._tlgSession.role === 'ESS' && window._tlgSession.role !== 'ESS_608') {
-        alert('Tài khoản của bạn không có quyền truy cập phân hệ Quản lý (MSS)!');
+    // Khóa bảo mật phân hệ MSS và HRM đối với tài khoản ESS thuần túy
+    if (portal === 'MSS' && window._tlgSession.role === 'ESS_608' && window._tlgSession.role !== 'MSS_ADMIN_CB') {
+        alert('Tài khoản ESS cá nhân không có quyền truy cập phân hệ Quản lý (MSS)!');
         return;
     }
-    if (portal === 'HRM' && window._tlgSession.role === 'ESS') {
-        alert('Tài khoản của bạn không có quyền Quản trị hệ thống!');
+    if (portal === 'HRM' && window._tlgSession.role !== 'MSS_ADMIN_CB' && window._tlgSession.role !== 'HRM') {
+        alert('Chỉ duy nhất C&B Admin (NV 00608) hoặc System Admin mới có quyền mở phân hệ Quản trị hệ thống!');
         return;
     }
 
@@ -61,7 +61,6 @@ function switchPortal(portal) {
     document.getElementById('portal-badge').innerText = `Giao diện: ${portal}`;
 
     if (portal === 'HRM') {
-        loadLegalEntities();
         loadEmployees();
     } else if (portal === 'MSS') {
         loadMSSLeaveRequests();
@@ -78,25 +77,6 @@ async function checkConnection() {
         console.error(err);
         document.getElementById('db-status').innerText = 'Lỗi kết nối Database!';
         document.getElementById('db-status').className = 'ml-2 font-bold text-rose-600';
-    }
-}
-
-async function loadLegalEntities() {
-    const tbody = document.getElementById('entities-table-body');
-    try {
-        const { data, error } = await _supabase.from('legal_entities').select('*').order('entity_id');
-        if (error) throw error;
-        if (data && data.length > 0) {
-            tbody.innerHTML = data.map(item => `
-                <tr class="border-b hover:bg-slate-50">
-                    <td class="p-3 font-mono text-slate-500">${item.entity_id}</td>
-                    <td class="p-3 font-bold text-blue-600">${item.entity_code}</td>
-                    <td class="p-3 font-medium text-slate-800">${item.entity_name}</td>
-                </tr>
-            `).join('');
-        }
-    } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="3" class="p-4 text-center text-rose-500">Lỗi khi tải dữ liệu: ${err.message}</td></tr>`;
     }
 }
 
@@ -118,7 +98,7 @@ async function loadEmployees() {
         window._tlgEmployees = data;
         renderEmployeesTable(data);
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-rose-500">Lỗi khi tải dữ liệu: ${err.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-rose-500">Lỗi khi tải dữ liệu Master Data: ${err.message}</td></tr>`;
     }
 }
 
@@ -159,6 +139,7 @@ function filterEmployees() {
     renderEmployeesTable(filtered);
 }
 
+// Bổ sung đầy đủ chỉ số Tổng quỹ BHBB và Tổng thu nhập C&B
 function viewEmployeeDetail(index) {
     const item = window._tlgEmployees[index];
     const emp = item.employees || {};
@@ -166,45 +147,71 @@ function viewEmployeeDetail(index) {
     const content = document.getElementById('modal-content');
     const formatMoney = (val) => val ? Number(val).toLocaleString('vi-VN') + ' VNĐ' : '0 VNĐ';
 
+    // Tính toán tổng BHBB và Tổng thu nhập
+    const baseSal = Number(sal.base_salary || 0);
+    const posAllow = Number(sal.allowance_position || 0);
+    const toxicAllow = Number(sal.allowance_toxic_15 || 0);
+    const specAllow = Number(sal.allowance_specialized_tech || 0);
+    const capSal = Number(sal.capacity_salary || 0);
+    const senAllow = Number(sal.allowance_seniority || 0);
+
+    const totalBHBB = baseSal + posAllow + toxicAllow + specAllow + capSal + senAllow;
+
+    const mealAllow = Number(sal.allowance_meal || 0);
+    const houseAllow = Number(sal.allowance_housing || 0);
+    const transAllow = Number(sal.allowance_transport || 0);
+    const attAllow = Number(sal.allowance_attendance || 0);
+
+    const totalIncome = totalBHBB + mealAllow + houseAllow + transAllow + attAllow;
+
     content.innerHTML = `
         <div>
-            <h4 class="font-bold text-slate-700 mb-2 border-b pb-1">1. Thông Tin Định Danh & Liên Lạc</h4>
+            <h4 class="font-bold text-slate-700 mb-2 border-b pb-1 text-sm">1. Thông Tin Định Danh & Liên Lạc</h4>
             <div class="grid grid-cols-2 gap-3 text-sm">
                 <div><span class="text-slate-500">Mã NV:</span> <strong class="text-slate-800">${emp.employee_id || 'N/A'}</strong></div>
                 <div><span class="text-slate-500">Họ và tên:</span> <strong class="text-slate-800">${emp.full_name || 'N/A'}</strong></div>
                 <div><span class="text-slate-500">SĐT Di động:</span> <span class="text-slate-800">${emp.mobile_phone || 'N/A'}</span></div>
-                <div><span class="text-slate-500">Email:</span> <span class="text-slate-800">${emp.email || 'N/A'}</span></div>
+                <div><span class="text-slate-500">Email công việc:</span> <span class="text-slate-800">${emp.email || 'N/A'}</span></div>
                 <div><span class="text-slate-500">Số CCCD / CMND:</span> <span class="text-slate-800">${emp.id_card_number || 'N/A'}</span></div>
                 <div><span class="text-slate-500">Mã số thuế:</span> <span class="text-slate-800">${emp.tax_code || 'N/A'}</span></div>
                 <div class="col-span-2"><span class="text-slate-500">Địa chỉ thường trú:</span> <span class="text-slate-800">${emp.permanent_address || 'N/A'}</span></div>
             </div>
         </div>
         <div>
-            <h4 class="font-bold text-slate-700 mb-2 border-b pb-1">2. Quan Hệ Công Tác & Hợp Đồng</h4>
+            <h4 class="font-bold text-slate-700 mb-2 border-b pb-1 text-sm">2. Quan Hệ Công Tác & Hợp Đồng</h4>
             <div class="grid grid-cols-2 gap-3 text-sm">
                 <div><span class="text-slate-500">Pháp nhân:</span> <strong class="text-blue-600">${item.legal_entities?.entity_name || 'N/A'}</strong></div>
                 <div><span class="text-slate-500">Số HĐLĐ:</span> <span class="text-slate-800">${item.contract_number || 'N/A'}</span></div>
                 <div><span class="text-slate-500">Chức danh:</span> <span class="text-slate-800">${item.job_title || 'N/A'}</span></div>
-                <div><span class="text-slate-500">Phòng ban:</span> <span class="text-slate-800">${item.department_name || 'N/A'}</span></div>
+                <div><span class="text-slate-500">Phòng ban / Đơn vị:</span> <span class="text-slate-800">${item.department_name || 'N/A'}</span></div>
             </div>
         </div>
         <div>
-            <h4 class="font-bold text-slate-700 mb-2 border-b pb-1">3. Cấu Trúc Lương C&B (Tách biệt BHBB & Phúc Lợi)</h4>
+            <h4 class="font-bold text-slate-700 mb-2 border-b pb-1 text-sm">3. Cơ Cấu Lương C&B Chi Tiết</h4>
             <div class="grid grid-cols-2 gap-4 text-sm bg-slate-50 p-4 rounded-xl border">
-                <div>
-                    <p class="font-semibold text-slate-700 mb-2">Các khoản đóng BHBB:</p>
+                <div class="space-y-2 border-r pr-3">
+                    <p class="font-semibold text-slate-700 text-xs uppercase">Các khoản tính đóng BHBB:</p>
                     <ul class="space-y-1 text-slate-600 text-xs">
-                        <li>- Lương chính: <span class="font-bold text-slate-800">${formatMoney(sal.base_salary)}</span></li>
-                        <li>- PC Trách nhiệm: <span class="font-bold text-slate-800">${formatMoney(sal.allowance_position)}</span></li>
+                        <li>- Lương chính: <span class="font-bold text-slate-800">${formatMoney(baseSal)}</span></li>
+                        <li>- PC Trách nhiệm: <span class="font-bold text-slate-800">${formatMoney(posAllow)}</span></li>
+                        ${toxicAllow > 0 ? `<li>- PC Độc hại (15%): <span class="font-bold text-slate-800">${formatMoney(toxicAllow)}</span></li>` : ''}
                     </ul>
+                    <div class="pt-2 border-t">
+                        <span class="text-xs font-semibold text-blue-700">TỔNG CĂN CỨ ĐÓNG BHBB:</span>
+                        <strong class="block text-sm text-blue-900 font-bold">${formatMoney(totalBHBB)}</strong>
+                    </div>
                 </div>
-                <div>
-                    <p class="font-semibold text-slate-700 mb-2">Phúc lợi (Không đóng BHBB):</p>
+                <div class="space-y-2 pl-1">
+                    <p class="font-semibold text-slate-700 text-xs uppercase">Khoản Phúc lợi (Không đóng BHBB):</p>
                     <ul class="space-y-1 text-slate-600 text-xs">
-                        <li>- Hỗ trợ nhà ở: <span class="font-bold text-slate-800">${formatMoney(sal.allowance_housing)}</span></li>
-                        <li>- Hỗ trợ xăng xe: <span class="font-bold text-slate-800">${formatMoney(sal.allowance_transport)}</span></li>
-                        <li>- Hỗ trợ chuyên cần: <span class="font-bold text-slate-800">${formatMoney(sal.allowance_attendance)}</span></li>
+                        <li>- Phụ cấp nhà ở: <span class="font-bold text-slate-800">${formatMoney(houseAllow)}</span></li>
+                        <li>- Phụ cấp xăng xe: <span class="font-bold text-slate-800">${formatMoney(transAllow)}</span></li>
+                        <li>- Phụ cấp chuyên cần: <span class="font-bold text-slate-800">${formatMoney(attAllow)}</span></li>
                     </ul>
+                    <div class="pt-2 border-t">
+                        <span class="text-xs font-semibold text-emerald-700">TỔNG THU NHẬP (TỔNG LƯƠNG 3P):</span>
+                        <strong class="block text-sm text-emerald-900 font-bold">${formatMoney(totalIncome)}</strong>
+                    </div>
                 </div>
             </div>
         </div>
@@ -217,7 +224,7 @@ function closeEmployeeModal() {
 }
 
 // ==========================================================================
-// MODULE QUẢN LÝ PHÉP NĂM & PHÂN QUYỀN MSS / ESS
+// THUẬT TOÁN ĐỆ QUY PHÂN QUYỀN VÀ QUẢN LÝ PHÉP NĂM (MSS / ESS)
 // ==========================================================================
 
 function openLeaveModal() {
@@ -251,7 +258,6 @@ async function loadEmployeeLeaveBalance() {
     }
 }
 
-// ESS: Nhân viên tự đăng ký phép cho chính mình
 async function submitLeaveRequest(event) {
     event.preventDefault();
     const startDate = document.getElementById('leave-start').value;
@@ -278,7 +284,7 @@ async function submitLeaveRequest(event) {
     }
 }
 
-// MSS: Quản lý hoặc Admin bộ phận xem danh sách đơn theo phạm vi
+// MSS: Quét cây nhân sự cấp dưới đệ quy để hiển thị danh sách đơn xin phép
 async function loadMSSLeaveRequests() {
     const tbody = document.getElementById('mss-leave-requests-body');
     const scopeDesc = document.getElementById('mss-scope-desc');
@@ -286,14 +292,21 @@ async function loadMSSLeaveRequests() {
     const role = window._tlgSession.role;
     const isSuperAdmin = (role === 'MSS_ADMIN_CB' || role === 'HRM' || window._tlgSession.employeeId === '00608');
 
-    scopeDesc.innerText = `Quyền hiện tại: ${role} ${isSuperAdmin ? '(Đặc quyền C&B/CEO - Có quyền gỡ/xóa đơn đã hoàn tất)' : ''}`;
+    scopeDesc.innerText = `Quyền hiện tại: ${role} ${isSuperAdmin ? '(Đặc quyền C&B Admin - Thao tác toàn tập đoàn)' : '(Giới hạn trong cây quản lý trực tiếp/gián tiếp)'}`;
 
     try {
-        const { data, error } = await _supabase
-            .from('leave_requests')
-            .select(`*, employees ( full_name, employee_id )`)
-            .order('created_at', { ascending: false });
+        let query = _supabase.from('leave_requests').select(`*, employees ( full_name, employee_id )`).order('created_at', { ascending: false });
 
+        // Nếu không phải SuperAdmin C&B thì tự động lọc theo cây đệ quy
+        if (!isSuperAdmin) {
+            const { data: treeData } = await _supabase.rpc('get_managed_employee_ids', { root_manager_id: window._tlgSession.employeeId });
+            const allowedIds = treeData ? treeData.map(t => t.employee_id) : [];
+            allowedIds.push(window._tlgSession.employeeId); // Bao gồm chính quản lý
+
+            query = query.in('employee_id', allowedIds);
+        }
+
+        const { data, error } = await query;
         if (error) throw error;
 
         if (data && data.length > 0) {
@@ -318,8 +331,8 @@ async function loadMSSLeaveRequests() {
                 } else if (isFinalized) {
                     if (isSuperAdmin) {
                         actionButtons = `
-                            <button onclick="forceUnapproveLeave(${item.request_id})" class="px-2 py-1 bg-purple-600 text-white rounded text-xs font-semibold hover:bg-purple-700">Đặc quyền Gỡ (C&B/CEO)</button>
-                            <button onclick="deleteLeaveRequest(${item.request_id})" class="px-2 py-1 bg-rose-800 text-white rounded text-xs font-semibold hover:bg-rose-900">Xóa đơn</button>
+                            <button onclick="forceUnapproveLeave(${item.request_id})" class="px-2 py-1 bg-purple-600 text-white rounded text-xs font-semibold hover:bg-purple-700">Gỡ (C&B/CEO)</button>
+                            <button onclick="deleteLeaveRequest(${item.request_id})" class="px-2 py-1 bg-rose-800 text-white rounded text-xs font-semibold hover:bg-rose-900">Xóa</button>
                         `;
                     } else {
                         actionButtons = `<span class="text-xs font-bold text-slate-400">Đã khóa hoàn tất</span>`;
@@ -345,21 +358,24 @@ async function loadMSSLeaveRequests() {
                 `;
             }).join('');
         } else {
-            tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-slate-400">Không có đơn nghỉ phép nào trong hệ thống.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-slate-400">Không có đơn nghỉ phép nào trong phạm vi quản lý của bạn.</td></tr>';
         }
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-rose-500">Lỗi tải dữ liệu: ${err.message}</td></tr>`;
     }
 }
 
+// MSS: Nạp danh sách nhân sự cấp dưới vào dropdown làm thay dựa trên cây phân quyền
 async function openAdminLeaveRegisterModal() {
-    if (window._tlgSession.role === 'ESS' && window._tlgSession.role !== 'ESS_608') {
-        alert('Bạn không có quyền đăng ký phép thay cho nhân sự khác!');
+    if (window._tlgSession.role === 'ESS_608') {
+        alert('Tài khoản ESS cá nhân không có quyền đăng ký phép thay cho nhân sự khác!');
         return;
     }
     document.getElementById('admin-leave-modal').classList.remove('hidden');
     
     const select = document.getElementById('admin-target-emp');
+    const isSuperAdmin = (window._tlgSession.role === 'MSS_ADMIN_CB' || window._tlgSession.role === 'HRM' || window._tlgSession.employeeId === '00608');
+
     try {
         let query = _supabase.from('employee_contracts').select(`
             employee_id,
@@ -368,31 +384,29 @@ async function openAdminLeaveRegisterModal() {
             employees ( employee_id, full_name )
         `).eq('is_active', true);
 
-        const role = window._tlgSession.role;
-        if (role === 'MSS_ADMIN_LK') {
-            query = query.eq('legal_entities.entity_code', 'TL');
-        } else if (role === 'MSS_ADMIN_MD') {
-            query = query.eq('legal_entities.entity_code', 'MD');
-        } else if (role === 'MSS_ADMIN_LOGISTICS') {
-            query = query.ilike('department_name', '%Vận tải%');
+        // Lọc theo cây đệ quy nếu không phải C&B Admin
+        if (!isSuperAdmin) {
+            const { data: treeData } = await _supabase.rpc('get_managed_employee_ids', { root_manager_id: window._tlgSession.employeeId });
+            const allowedIds = treeData ? treeData.map(t => t.employee_id) : [];
+            query = query.in('employee_id', allowedIds);
         }
 
         const { data, error } = await query;
         if (error) throw error;
 
         if (data && data.length > 0) {
-            select.innerHTML = '<option value="">-- Chọn nhân viên trong phạm vi quản lý --</option>' + 
+            select.innerHTML = '<option value="">-- Chọn nhân viên cấp dưới --</option>' + 
                 data.map(item => {
                     const emp = item.employees;
                     if (!emp) return '';
                     return `<option value="${emp.employee_id}">${emp.employee_id} - ${emp.full_name} (${item.department_name || 'N/A'})</option>`;
                 }).join('');
         } else {
-            select.innerHTML = '<option value="">Không có nhân sự nào trong phạm vi quản lý của bạn</option>';
+            select.innerHTML = '<option value="">Không có nhân sự nào nằm trong cây quản lý của bạn</option>';
         }
     } catch (err) {
-        console.error("Lỗi lọc danh sách nhân sự theo phạm vi:", err);
-        select.innerHTML = '<option value="">Lỗi tải danh sách nhân sự</option>';
+        console.error("Lỗi nạp cây nhân sự cấp dưới:", err);
+        select.innerHTML = '<option value="">Lỗi tải danh sách nhân sự cấp dưới</option>';
     }
 }
 
@@ -414,7 +428,7 @@ async function submitAdminLeaveRequest(event) {
             start_date: startDate,
             end_date: endDate,
             total_days: 1.0,
-            reason: `[Đăng ký bởi ${window._tlgSession.role}] ${reason}`,
+            reason: `[Đăng ký thay bởi Quản lý ${window._tlgSession.employeeId}] ${reason}`,
             status: 'APPROVED'
         }]);
 
