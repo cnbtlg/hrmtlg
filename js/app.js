@@ -9,6 +9,17 @@ window._tlgSession = {
     scope: 'ALL'
 };
 
+// Hàm chuẩn hóa chuỗi ngày từ YYYY-MM-DD hoặc ISO sang DD-MM-YYYY
+function formatDateVN(dateStr) {
+    if (!dateStr) return 'N/A';
+    const cleanDate = String(dateStr).split('T')[0];
+    const parts = cleanDate.split('-');
+    if (parts.length === 3) {
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+    return dateStr;
+}
+
 function changeMockRole(roleVal) {
     window._tlgSession.role = roleVal;
     if (roleVal === 'MSS_ADMIN_CB' || roleVal === 'ESS_608') {
@@ -166,6 +177,7 @@ function viewEmployeeDetail(index) {
             <div class="grid grid-cols-2 gap-3 text-sm">
                 <div><span class="text-slate-500">Mã NV:</span> <strong class="text-slate-800">${emp.employee_id || 'N/A'}</strong></div>
                 <div><span class="text-slate-500">Họ và tên:</span> <strong class="text-slate-800">${emp.full_name || 'N/A'}</strong></div>
+                <div><span class="text-slate-500">Ngày sinh:</span> <span class="text-slate-800">${formatDateVN(emp.date_of_birth)}</span></div>
                 <div><span class="text-slate-500">SĐT Di động:</span> <span class="text-slate-800">${emp.mobile_phone || 'N/A'}</span></div>
                 <div><span class="text-slate-500">Email:</span> <span class="text-slate-800">${emp.email || 'N/A'}</span></div>
                 <div><span class="text-slate-500">Số CCCD:</span> <span class="text-slate-800">${emp.id_card_number || 'N/A'}</span></div>
@@ -223,12 +235,11 @@ function closeEmployeeModal() {
 // CÔNG CỤ EXPORT / IMPORT EXCEL & TẢI FILE MẪU CHUẨN (SHEETJS)
 // ==========================================================================
 
-// 1. Tải File Mẫu Excel Import (Template)
 function downloadExcelTemplate() {
     const templateData = [{
         "Mã NV": "00609",
         "Họ và Tên": "Nguyễn Văn A",
-        "Ngày Sinh (YYYY-MM-DD)": "1990-05-15",
+        "Ngày Sinh (DD-MM-YYYY)": "15-05-1990",
         "Giới Tính": "Nam",
         "Điện Thoại": "0901234567",
         "Email": "anv@tlmetals.vn",
@@ -253,7 +264,6 @@ function downloadExcelTemplate() {
     XLSX.writeFile(workbook, "TLG_HRM_Import_Template.xlsx");
 }
 
-// 2. Xuất Toàn Bộ Dữ Liệu Hiện Tại Ra Excel
 function exportMasterDataExcel() {
     if (!window._tlgEmployees || window._tlgEmployees.length === 0) {
         alert('Không có dữ liệu nhân sự để xuất Excel!');
@@ -266,7 +276,7 @@ function exportMasterDataExcel() {
         return {
             "Mã NV": emp.employee_id || '',
             "Họ và Tên": emp.full_name || '',
-            "Ngày Sinh": emp.date_of_birth || '',
+            "Ngày Sinh": formatDateVN(emp.date_of_birth),
             "Giới Tính": emp.gender || '',
             "Điện Thoại": emp.mobile_phone || '',
             "Email": emp.email || '',
@@ -290,11 +300,10 @@ function exportMasterDataExcel() {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "TLG_MasterData_CB");
     
-    const dateStr = new Date().toISOString().slice(0, 10);
+    const dateStr = formatDateVN(new Date().toISOString().slice(0, 10));
     XLSX.writeFile(workbook, `TLG_HRM_MasterData_${dateStr}.xlsx`);
 }
 
-// 3. Nhập Dữ Liệu Hàng Loạt Từ File Excel
 function importMasterDataExcel(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -319,11 +328,22 @@ function importMasterDataExcel(event) {
                     const empId = String(row["Mã NV"] || '').trim();
                     if (!empId) continue;
 
-                    // Upsert bảng employees
+                    // Xử lý chuyển ngược ngày sinh DD-MM-YYYY về YYYY-MM-DD để lưu database
+                    let rawDob = row["Ngày Sinh (DD-MM-YYYY)"] || row["Ngày Sinh"] || '';
+                    let dbDob = null;
+                    if (rawDob) {
+                        const p = String(rawDob).split('-');
+                        if (p.length === 3 && p[0].length === 2) {
+                            dbDob = `${p[2]}-${p[1]}-${p[0]}`;
+                        } else {
+                            dbDob = rawDob;
+                        }
+                    }
+
                     await _supabase.from('employees').upsert({
                         employee_id: empId,
                         full_name: row["Họ và Tên"] || '',
-                        date_of_birth: row["Ngày Sinh (YYYY-MM-DD)"] || row["Ngày Sinh"] || null,
+                        date_of_birth: dbDob,
                         gender: row["Giới Tính"] || 'Nam',
                         mobile_phone: String(row["Điện Thoại"] || ''),
                         email: row["Email"] || '',
@@ -467,7 +487,7 @@ async function loadMSSLeaveRequests() {
                         <td class="p-3 font-mono font-bold text-blue-600">${item.employees?.employee_id || item.employee_id}</td>
                         <td class="p-3 font-medium text-slate-800">${item.employees?.full_name || 'N/A'}</td>
                         <td class="p-3"><span class="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-bold">${item.leave_type}</span></td>
-                        <td class="p-3 text-slate-600 text-xs">${item.start_date} $\rightarrow$ ${item.end_date}</td>
+                        <td class="p-3 text-slate-600 text-xs">${formatDateVN(item.start_date)} đến ${formatDateVN(item.end_date)}</td>
                         <td class="p-3 text-slate-600">${item.reason}</td>
                         <td class="p-3">${statusBadges[item.status] || item.status} ${isFinalized ? '<br><span class="text-[10px] text-blue-600 font-bold">[Hoàn tất]</span>' : ''}</td>
                         <td class="p-3 space-x-1">${actionButtons}</td>
