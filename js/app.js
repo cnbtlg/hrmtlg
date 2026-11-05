@@ -1,5 +1,5 @@
 // ==========================================================================
-// TLG HRM - APPLICATION LOGIC, PROPOSALS, EXCEL & RECURSIVE PERMISSIONS
+// TLG HRM - FULL APPLICATION LOGIC & ADVANCED AND/OR FILTERS
 // ==========================================================================
 
 window._tlgSession = {
@@ -107,7 +107,7 @@ async function loadEmployees() {
         window._tlgEmployees = data;
         renderEmployeesTable(data);
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-rose-500">Lỗi khi tải dữ liệu Master Data: ${err.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-rose-500">Lỗi tải Master Data: ${err.message}</td></tr>`;
     }
 }
 
@@ -130,22 +130,57 @@ function renderEmployeesTable(data) {
             `;
         }).join('');
     } else {
-        tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">Không tìm thấy nhân sự phù hợp.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">Không tìm thấy nhân sự phù hợp với điều kiện lọc.</td></tr>';
     }
 }
 
-function filterEmployees() {
-    const keyword = document.getElementById('search-input').value.toLowerCase().trim();
-    const selectedEntity = document.getElementById('filter-entity').value;
+// BỘ LỌC NÂNG CAO KẾT HỢP TOÁN TỬ AND / OR
+function applyAdvancedFilter() {
     if (!window._tlgEmployees) return;
+
+    const keyword = document.getElementById('adv-keyword').value.toLowerCase().trim();
+    const selectedEntity = document.getElementById('adv-entity').value;
+    const operator = document.getElementById('adv-operator').value; // 'AND' hoặc 'OR'
+    const deptKeyword = document.getElementById('adv-department').value.toLowerCase().trim();
 
     const filtered = window._tlgEmployees.filter(item => {
         const empId = (item.employees?.employee_id || '').toLowerCase();
         const fullName = (item.employees?.full_name || '').toLowerCase();
         const entityCode = item.legal_entities?.entity_code || '';
-        return (empId.includes(keyword) || fullName.includes(keyword)) && (selectedEntity === '' || entityCode === selectedEntity);
+        const deptName = (item.department_name || '').toLowerCase();
+
+        const matchKeyword = (keyword === '' || empId.includes(keyword) || fullName.includes(keyword));
+        const matchEntity = (selectedEntity === '' || entityCode === selectedEntity);
+        const matchDept = (deptKeyword === '' || deptName.includes(deptKeyword));
+
+        if (keyword === '' && selectedEntity === '' && deptKeyword === '') {
+            return true;
+        }
+
+        if (operator === 'AND') {
+            let pass = true;
+            if (keyword !== '' && !matchKeyword) pass = false;
+            if (selectedEntity !== '' && !matchEntity) pass = false;
+            if (deptKeyword !== '' && !matchDept) pass = false;
+            return pass;
+        } else {
+            let pass = false;
+            if (keyword !== '' && matchKeyword) pass = true;
+            if (selectedEntity !== '' && matchEntity) pass = true;
+            if (deptKeyword !== '' && matchDept) pass = true;
+            return pass;
+        }
     });
+
     renderEmployeesTable(filtered);
+}
+
+function resetAdvancedFilter() {
+    document.getElementById('adv-keyword').value = '';
+    document.getElementById('adv-entity').value = '';
+    document.getElementById('adv-operator').value = 'AND';
+    document.getElementById('adv-department').value = '';
+    renderEmployeesTable(window._tlgEmployees);
 }
 
 function viewEmployeeDetail(index) {
@@ -459,7 +494,7 @@ async function submitProposal(event) {
         const { error } = await _supabase.from('hr_proposals').insert([payload]);
         if (error) throw error;
 
-        alert('Tạo đề xuất / trình ký thành công! Đơn đã chuyển tới C&B Admin thẩm định.');
+        alert('Tạo đề xuất / trình ký thành công!');
         document.getElementById('proposal-form').reset();
         closeProposalModal();
         loadMSSProposals();
@@ -502,11 +537,11 @@ async function loadMSSProposals() {
                 let actionButtons = '';
                 if (item.status === 'PENDING' && isSuperAdmin) {
                     actionButtons = `
-                        <button onclick="approveProposal(${item.proposal_id})" class="px-2 py-1 bg-emerald-600 text-white rounded text-xs font-semibold hover:bg-emerald-700">Duyệt & Cập nhật Master</button>
+                        <button onclick="approveProposal(${item.proposal_id})" class="px-2 py-1 bg-emerald-600 text-white rounded text-xs font-semibold hover:bg-emerald-700">Duyệt & Cập nhật</button>
                         <button onclick="rejectProposal(${item.proposal_id})" class="px-2 py-1 bg-rose-600 text-white rounded text-xs font-semibold hover:bg-rose-700">Từ chối</button>
                     `;
                 } else if (item.status === 'APPROVED') {
-                    actionButtons = `<span class="text-xs font-bold text-emerald-600">[Đã duyệt & Đã áp dụng]</span>`;
+                    actionButtons = `<span class="text-xs font-bold text-emerald-600">[Đã duyệt & Áp dụng]</span>`;
                 } else {
                     actionButtons = `<span class="text-xs font-bold text-slate-400">Đang chờ C&B duyệt</span>`;
                 }
@@ -534,17 +569,12 @@ async function loadMSSProposals() {
     }
 }
 
-// C&B Duyệt đề xuất & Tự động cập nhật Master Data
 async function approveProposal(proposalId) {
-    if (confirm('Xác nhận duyệt đề xuất này? Dữ liệu lương/HĐLĐ mới sẽ được tự động cập nhật vào Master Data nhân sự.')) {
+    if (confirm('Xác nhận duyệt đề xuất này? Dữ liệu sẽ tự động cập nhật vào hệ thống.')) {
         try {
-            const { error } = await _supabase
-                .from('hr_proposals')
-                .update({ status: 'APPROVED' })
-                .eq('proposal_id', proposalId);
-
+            const { error } = await _supabase.from('hr_proposals').update({ status: 'APPROVED' }).eq('proposal_id', proposalId);
             if (error) throw error;
-            alert('Đã phê duyệt đề xuất thành công và tự động áp dụng vào hệ thống!');
+            alert('Đã phê duyệt đề xuất thành công!');
             loadMSSProposals();
         } catch (err) {
             alert('Lỗi phê duyệt: ' + err.message);
@@ -555,11 +585,7 @@ async function approveProposal(proposalId) {
 async function rejectProposal(proposalId) {
     if (confirm('Xác nhận từ chối đề xuất này?')) {
         try {
-            const { error } = await _supabase
-                .from('hr_proposals')
-                .update({ status: 'REJECTED' })
-                .eq('proposal_id', proposalId);
-
+            const { error } = await _supabase.from('hr_proposals').update({ status: 'REJECTED' }).eq('proposal_id', proposalId);
             if (error) throw error;
             alert('Đã từ chối đề xuất!');
             loadMSSProposals();
@@ -570,7 +596,7 @@ async function rejectProposal(proposalId) {
 }
 
 // ==========================================================================
-// THUẬT TOÁN ĐỆ QUY PHÂN QUYỀN VÀ QUẢN LÝ PHÉP NĂM (MSS / ESS)
+// QUẢN LÝ PHÉP NĂM (MSS / ESS)
 // ==========================================================================
 
 function openLeaveModal() {
@@ -584,13 +610,7 @@ function closeLeaveModal() {
 
 async function loadEmployeeLeaveBalance() {
     try {
-        const { data, error } = await _supabase
-            .from('leave_balances')
-            .select('*')
-            .eq('employee_id', window._tlgSession.employeeId)
-            .eq('year', 2026)
-            .limit(1);
-
+        const { data, error } = await _supabase.from('leave_balances').select('*').eq('employee_id', window._tlgSession.employeeId).eq('year', 2026).limit(1);
         if (error) throw error;
         if (data && data.length > 0) {
             const b = data[0];
@@ -637,7 +657,7 @@ async function loadMSSLeaveRequests() {
     const role = window._tlgSession.role;
     const isSuperAdmin = (role === 'MSS_ADMIN_CB' || role === 'HRM' || window._tlgSession.employeeId === '00608');
 
-    scopeDesc.innerText = `Quyền hiện tại: ${role} ${isSuperAdmin ? '(Đặc quyền C&B Admin - Thao tác toàn tập đoàn)' : '(Giới hạn trong cây quản lý trực tiếp/gián tiếp)'}`;
+    scopeDesc.innerText = `Quyền hiện tại: ${role} ${isSuperAdmin ? '(C&B Admin - Toàn tập đoàn)' : '(Giới hạn cây quản lý)'}`;
 
     try {
         let query = _supabase.from('leave_requests').select(`*, employees ( full_name, employee_id )`).order('created_at', { ascending: false });
@@ -667,12 +687,12 @@ async function loadMSSLeaveRequests() {
                     `;
                 } else if ((isApproved || isRejected) && !isFinalized) {
                     actionButtons = `
-                        <button onclick="updateLeaveStatus(${item.request_id}, 'PENDING')" class="px-2 py-1 bg-slate-600 text-white rounded text-xs font-semibold hover:bg-slate-700">Gỡ duyệt</button>
-                        <button onclick="finalizeLeaveRequest(${item.request_id})" class="px-2 py-1 bg-blue-600 text-white rounded text-xs font-semibold hover:bg-blue-700">Chốt hoàn tất</button>
+                        <button onclick="updateLeaveStatus(${item.request_id}, 'PENDING')" class="px-2 py-1 bg-slate-600 text-white rounded text-xs font-semibold hover:bg-slate-700">Gỡ</button>
+                        <button onclick="finalizeLeaveRequest(${item.request_id})" class="px-2 py-1 bg-blue-600 text-white rounded text-xs font-semibold hover:bg-blue-700">Chốt</button>
                     `;
                 } else if (isFinalized && isSuperAdmin) {
                     actionButtons = `
-                        <button onclick="forceUnapproveLeave(${item.request_id})" class="px-2 py-1 bg-purple-600 text-white rounded text-xs font-semibold hover:bg-purple-700">Gỡ (C&B/CEO)</button>
+                        <button onclick="forceUnapproveLeave(${item.request_id})" class="px-2 py-1 bg-purple-600 text-white rounded text-xs font-semibold hover:bg-purple-700">Gỡ (C&B)</button>
                         <button onclick="deleteLeaveRequest(${item.request_id})" class="px-2 py-1 bg-rose-800 text-white rounded text-xs font-semibold hover:bg-rose-900">Xóa</button>
                     `;
                 }
@@ -696,7 +716,7 @@ async function loadMSSLeaveRequests() {
                 `;
             }).join('');
         } else {
-            tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-slate-400">Không có đơn nghỉ phép nào trong phạm vi quản lý của bạn.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-slate-400">Không có đơn nghỉ phép nào.</td></tr>';
         }
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-rose-500">Lỗi tải dữ liệu: ${err.message}</td></tr>`;
@@ -705,7 +725,7 @@ async function loadMSSLeaveRequests() {
 
 async function openAdminLeaveRegisterModal() {
     if (window._tlgSession.role === 'ESS_608') {
-        alert('Tài khoản ESS cá nhân không có quyền đăng ký phép thay cho nhân sự khác!');
+        alert('Tài khoản ESS cá nhân không có quyền đăng ký phép thay!');
         return;
     }
     document.getElementById('admin-leave-modal').classList.remove('hidden');
@@ -738,7 +758,7 @@ async function openAdminLeaveRegisterModal() {
                     return `<option value="${emp.employee_id}">${emp.employee_id} - ${emp.full_name} (${item.department_name || 'N/A'})</option>`;
                 }).join('');
         } else {
-            select.innerHTML = '<option value="">Không có nhân sự nào nằm trong cây quản lý của bạn</option>';
+            select.innerHTML = '<option value="">Không có nhân sự nào trong cây quản lý</option>';
         }
     } catch (err) {
         console.error(err);
@@ -763,66 +783,50 @@ async function submitAdminLeaveRequest(event) {
             start_date: startDate,
             end_date: endDate,
             total_days: 1.0,
-            reason: `[Đăng ký thay bởi Quản lý ${window._tlgSession.employeeId}] ${reason}`,
+            reason: `[Đăng ký thay bởi ${window._tlgSession.employeeId}] ${reason}`,
             status: 'APPROVED'
         }]);
 
         if (error) throw error;
-        alert('Đã đăng ký và phê duyệt phép thay cho nhân sự thành công!');
+        alert('Đăng ký phép thay thành công!');
         document.getElementById('admin-leave-form').reset();
         closeAdminLeaveModal();
         loadMSSLeaveRequests();
     } catch (err) {
-        alert('Lỗi đăng ký phép thay: ' + err.message);
+        alert('Lỗi: ' + err.message);
     }
 }
 
 async function updateLeaveStatus(requestId, newStatus) {
     try {
-        const { error } = await _supabase
-            .from('leave_requests')
-            .update({ 
-                status: newStatus,
-                approved_by: window._tlgSession.employeeId,
-                approved_at: new Date().toISOString()
-            })
-            .eq('request_id', requestId);
-
+        const { error } = await _supabase.from('leave_requests').update({ status: newStatus, approved_by: window._tlgSession.employeeId, approved_at: new Date().toISOString() }).eq('request_id', requestId);
         if (error) throw error;
-        alert(`Đã chuyển trạng thái đơn sang: ${newStatus}`);
+        alert(`Đã cập nhật trạng thái đơn.`);
         loadMSSLeaveRequests();
     } catch (err) {
-        alert('Lỗi cập nhật trạng thái: ' + err.message);
+        alert('Lỗi: ' + err.message);
     }
 }
 
 async function finalizeLeaveRequest(requestId) {
     try {
-        const { error } = await _supabase
-            .from('leave_requests')
-            .update({ is_finalized: true })
-            .eq('request_id', requestId);
-
+        const { error } = await _supabase.from('leave_requests').update({ is_finalized: true }).eq('request_id', requestId);
         if (error) throw error;
-        alert('Đã chốt hoàn tất đơn nghỉ phép thành công.');
+        alert('Đã chốt hoàn tất đơn.');
         loadMSSLeaveRequests();
     } catch (err) {
-        alert('Lỗi chốt hoàn tất: ' + err.message);
+        alert('Lỗi: ' + err.message);
     }
 }
 
 async function forceUnapproveLeave(requestId) {
     try {
-        const { error } = await _supabase
-            .from('leave_requests')
-            .update({ status: 'PENDING', is_finalized: false })
-            .eq('request_id', requestId);
-
+        const { error } = await _supabase.from('leave_requests').update({ status: 'PENDING', is_finalized: false }).eq('request_id', requestId);
         if (error) throw error;
         alert('Đã gỡ duyệt thành công!');
         loadMSSLeaveRequests();
     } catch (err) {
-        alert('Lỗi gỡ duyệt: ' + err.message);
+        alert('Lỗi: ' + err.message);
     }
 }
 
@@ -831,10 +835,10 @@ async function deleteLeaveRequest(requestId) {
         try {
             const { error } = await _supabase.from('leave_requests').delete().eq('request_id', requestId);
             if (error) throw error;
-            alert('Đã xóa đơn thành công!');
+            alert('Đã xóa đơn!');
             loadMSSLeaveRequests();
         } catch (err) {
-            alert('Lỗi xóa đơn: ' + err.message);
+            alert('Lỗi: ' + err.message);
         }
     }
 }
