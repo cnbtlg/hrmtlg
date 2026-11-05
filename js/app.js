@@ -1,5 +1,5 @@
 // ==========================================================================
-// TLG HRM - APPLICATION LOGIC, EXCEL EXPORT/IMPORT & RECURSIVE PERMISSIONS
+// TLG HRM - APPLICATION LOGIC, EXCEL TEMPLATE, EXPORT/IMPORT & RECURSIVE PERMISSIONS
 // ==========================================================================
 
 window._tlgSession = {
@@ -220,31 +220,63 @@ function closeEmployeeModal() {
 }
 
 // ==========================================================================
-// CÔNG CỤ EXPORT / IMPORT EXCEL (SHEETJS INTEGRATION)
+// CÔNG CỤ EXPORT / IMPORT EXCEL & TẢI FILE MẪU CHUẨN (SHEETJS)
 // ==========================================================================
 
+// 1. Tải File Mẫu Excel Import (Template)
+function downloadExcelTemplate() {
+    const templateData = [{
+        "Mã NV": "00609",
+        "Họ và Tên": "Nguyễn Văn A",
+        "Ngày Sinh (YYYY-MM-DD)": "1990-05-15",
+        "Giới Tính": "Nam",
+        "Điện Thoại": "0901234567",
+        "Email": "anv@tlmetals.vn",
+        "Số CCCD": "079090012345",
+        "Mã Số Thuế": "8281234567",
+        "Địa Chỉ": "123 Nguyễn Trãi, Quận 5, TP.HCM",
+        "Pháp Nhân (TL/MD/KT/XM)": "TL",
+        "Số HĐLĐ": "00609-1/HDLD-TL",
+        "Chức Danh": "Kỹ thuật viên vận hành",
+        "Phòng Ban": "Xưởng Luyện Kim",
+        "Lương Chính (BHBB)": 15000000,
+        "PC Trách Nhiệm": 2000000,
+        "PC Độc Hại 15%": 1500000,
+        "PC Nhà Ở": 800000,
+        "PC Xăng Xe": 500000,
+        "PC Chuyên Cần": 500000
+    }];
+
+    const worksheet = XLSX.utils.json_to_sheet(templateData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Template_MasterData");
+    XLSX.writeFile(workbook, "TLG_HRM_Import_Template.xlsx");
+}
+
+// 2. Xuất Toàn Bộ Dữ Liệu Hiện Tại Ra Excel
 function exportMasterDataExcel() {
     if (!window._tlgEmployees || window._tlgEmployees.length === 0) {
         alert('Không có dữ liệu nhân sự để xuất Excel!');
         return;
     }
 
-    // Chuẩn bị mảng dữ liệu phẳng để xuất Excel
     const exportData = window._tlgEmployees.map(item => {
         const emp = item.employees || {};
         const sal = (item.salary_structures && item.salary_structures.length > 0) ? item.salary_structures[0] : {};
         return {
             "Mã NV": emp.employee_id || '',
             "Họ và Tên": emp.full_name || '',
+            "Ngày Sinh": emp.date_of_birth || '',
+            "Giới Tính": emp.gender || '',
+            "Điện Thoại": emp.mobile_phone || '',
+            "Email": emp.email || '',
+            "Số CCCD": emp.id_card_number || '',
+            "Mã Số Thuế": emp.tax_code || '',
+            "Địa Chỉ": emp.permanent_address || '',
             "Pháp Nhân": item.legal_entities?.entity_code || '',
             "Số HĐLĐ": item.contract_number || '',
             "Chức Danh": item.job_title || '',
             "Phòng Ban": item.department_name || '',
-            "Ngày Sinh": emp.date_of_birth || '',
-            "Điện Thoại": emp.mobile_phone || '',
-            "Email": emp.email || '',
-            "CCCD": emp.id_card_number || '',
-            "Mã Số Thuế": emp.tax_code || '',
             "Lương Chính (BHBB)": sal.base_salary || 0,
             "PC Trách Nhiệm": sal.allowance_position || 0,
             "PC Độc Hại 15%": sal.allowance_toxic_15 || 0,
@@ -254,16 +286,15 @@ function exportMasterDataExcel() {
         };
     });
 
-    // Tạo worksheet và workbook bằng SheetJS
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "TLG_MasterData_CB");
-
-    // Xuất file Excel
+    
     const dateStr = new Date().toISOString().slice(0, 10);
     XLSX.writeFile(workbook, `TLG_HRM_MasterData_${dateStr}.xlsx`);
 }
 
+// 3. Nhập Dữ Liệu Hàng Loạt Từ File Excel
 function importMasterDataExcel(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -282,22 +313,23 @@ function importMasterDataExcel(event) {
                 return;
             }
 
-            if (confirm(`Đã đọc thành công ${jsonRows.length} dòng từ file Excel. Bạn có muốn tiến hành đồng bộ dữ liệu vào hệ thống không?`)) {
-                // Xử lý import từng dòng lên Supabase
+            if (confirm(`Đã đọc thành công ${jsonRows.length} dòng từ file Excel. Bạn có muốn đồng bộ dữ liệu vào hệ thống không?`)) {
                 let countSuccess = 0;
                 for (let row of jsonRows) {
                     const empId = String(row["Mã NV"] || '').trim();
                     if (!empId) continue;
 
-                    // 1. Upsert employee
+                    // Upsert bảng employees
                     await _supabase.from('employees').upsert({
                         employee_id: empId,
                         full_name: row["Họ và Tên"] || '',
-                        date_of_birth: row["Ngày Sinh"] || null,
+                        date_of_birth: row["Ngày Sinh (YYYY-MM-DD)"] || row["Ngày Sinh"] || null,
+                        gender: row["Giới Tính"] || 'Nam',
                         mobile_phone: String(row["Điện Thoại"] || ''),
                         email: row["Email"] || '',
-                        id_card_number: String(row["CCCD"] || ''),
-                        tax_code: String(row["Mã Số Thuế"] || '')
+                        id_card_number: String(row["Số CCCD"] || ''),
+                        tax_code: String(row["Mã Số Thuế"] || ''),
+                        permanent_address: row["Địa Chỉ"] || ''
                     }, { onConflict: 'employee_id' });
 
                     countSuccess++;
@@ -310,7 +342,7 @@ function importMasterDataExcel(event) {
             console.error(err);
             alert('Lỗi khi đọc hoặc import file Excel: ' + err.message);
         } finally {
-            event.target.value = ''; // Reset input file
+            event.target.value = '';
         }
     };
     reader.readAsArrayBuffer(file);
