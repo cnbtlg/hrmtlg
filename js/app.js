@@ -1,9 +1,47 @@
 // ==========================================================================
-// TLG HRM - MODULE 1: QUẢN LÝ HỒ SƠ NHÂN SỰ & HỢP ĐỒNG LAO ĐỘNG
+// TLG HRM - AUTHENTICATION, PERSISTENT SESSION (60 MINS) & MODULE 1
 // ==========================================================================
 
 window._tlgSession = null;
-window._tlgEmployees = [];
+const SESSION_DURATION_MS = 60 * 60 * 1000; // 60 phút
+
+// Khởi tạo kiểm tra session khi tải trang
+document.addEventListener('DOMContentLoaded', () => {
+    restoreSession();
+});
+
+function saveSession(sessionData) {
+    const expiresAt = new Date().getTime() + SESSION_DURATION_MS;
+    const payload = { ...sessionData, expiresAt };
+    localStorage.setItem('_tlg_session', JSON.stringify(payload));
+    window._tlgSession = sessionData;
+}
+
+function restoreSession() {
+    const raw = localStorage.getItem('_tlg_session');
+    if (!raw) return;
+
+    try {
+        const session = JSON.parse(raw);
+        if (new Date().getTime() > session.expiresAt) {
+            // Hết hạn 60 phút -> Xóa session
+            handleLogout();
+            return;
+        }
+
+        window._tlgSession = session;
+        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('app-container').classList.remove('hidden');
+
+        document.getElementById('user-display-name').innerText = `${session.employeeId} - ${session.fullName}`;
+        document.getElementById('user-display-role').innerText = `Vai trò: ${session.role}`;
+
+        switchPortal('ESS');
+        checkSmartContractAlerts();
+    } catch (e) {
+        localStorage.removeItem('_tlg_session');
+    }
+}
 
 // CHUẨN HÓA ĐỊNH DẠNG NGÀY THÁNG (DD-MM-YYYY)
 function formatDateVN(dateStr) {
@@ -43,17 +81,19 @@ async function handleLogin(event) {
             return;
         }
 
-        window._tlgSession = {
+        const sessionData = {
             employeeId: user.employee_id,
             fullName: user.employees?.full_name || 'N/A',
             role: user.role_type // 'ESS', 'MSS_MANAGER', 'CB_ADMIN', 'SYSTEM_ADMIN'
         };
 
+        saveSession(sessionData);
+
         document.getElementById('login-screen').classList.add('hidden');
         document.getElementById('app-container').classList.remove('hidden');
 
-        document.getElementById('user-display-name').innerText = `${user.employee_id} - ${window._tlgSession.fullName}`;
-        document.getElementById('user-display-role').innerText = `Vai trò: ${user.role_type}`;
+        document.getElementById('user-display-name').innerText = `${user.employee_id} - ${sessionData.fullName}`;
+        document.getElementById('user-display-role').innerText = `Vai trò: ${sessionData.role}`;
 
         switchPortal('ESS');
         checkSmartContractAlerts();
@@ -63,12 +103,14 @@ async function handleLogin(event) {
 }
 
 function handleLogout() {
-    if (confirm('Bạn có chắc chắn muốn đăng xuất khỏi hệ thống TLG HRM?')) {
-        window._tlgSession = null;
-        document.getElementById('app-container').classList.add('hidden');
-        document.getElementById('login-screen').classList.remove('hidden');
-        document.getElementById('login-form').reset();
-    }
+    localStorage.removeItem('_tlg_session');
+    window._tlgSession = null;
+    const appContainer = document.getElementById('app-container');
+    const loginScreen = document.getElementById('login-screen');
+    if (appContainer) appContainer.classList.add('hidden');
+    if (loginScreen) loginScreen.classList.remove('hidden');
+    const loginForm = document.getElementById('login-form');
+    if (loginForm) loginForm.reset();
 }
 
 function openChangePasswordModal() {
@@ -162,7 +204,6 @@ async function loadEmployees() {
     if (!tbody) return;
 
     try {
-        // Truy vấn Hợp đồng lao động kèm Thông tin Nhân sự & Pháp nhân
         const { data: contracts, error: errC } = await _supabase
             .from('employee_contracts')
             .select(`
@@ -175,7 +216,6 @@ async function loadEmployees() {
 
         if (errC) throw errC;
 
-        // Truy vấn Cơ cấu Lương 3P
         const { data: salaries, error: errS } = await _supabase
             .from('salary_structures')
             .select('*');
@@ -197,7 +237,6 @@ async function loadEmployees() {
             };
         });
 
-        // Tính toán chỉ số thống kê vòng đời Hợp đồng
         updateContractStatistics(window._tlgEmployees);
         renderEmployeesTable(window._tlgEmployees);
     } catch (err) {
@@ -239,7 +278,6 @@ function renderEmployeesTable(data) {
         tbody.innerHTML = data.map((item) => {
             const originalIndex = window._tlgEmployees.findIndex(e => e.contract_id === item.contract_id);
             
-            // Tính số ngày còn lại của Hợp đồng
             let contractBadge = '<span class="px-2 py-1 bg-slate-100 text-slate-700 rounded text-xs font-semibold">Vô thời hạn</span>';
             if (item.end_date) {
                 const endDate = new Date(item.end_date);
@@ -337,7 +375,6 @@ async function handleSaveContract(event) {
     const department = document.getElementById('contract-department').value.trim();
 
     try {
-        // 1. Kiểm tra tồn tại nhân sự
         const { data: emp, error: empErr } = await _supabase
             .from('employees')
             .select('employee_id')
@@ -349,13 +386,11 @@ async function handleSaveContract(event) {
             return;
         }
 
-        // 2. Chuyển hợp đồng cũ sang không còn hiệu lực
         await _supabase
             .from('employee_contracts')
             .update({ is_active: false })
             .eq('employee_id', empId);
 
-        // 3. Tạo Hợp đồng mới
         const { error: insErr } = await _supabase
             .from('employee_contracts')
             .insert({
@@ -502,7 +537,7 @@ async function checkSmartContractAlerts() {
         const desc = document.getElementById('ai-banner-desc');
         
         if (banner && desc) {
-            desc.innerHTML = `Hợp đồng của nhân sự <strong>${sample.employees?.full_name} (${sample.employee_id})</strong> sắp hết hạn trong 11 ngày tới. Bạn có muốn khởi tạo hợp đồng gia hạn mới?`;
+            desc.innerHTML = `Hợp đồng của nhân sự <strong>${sample.employees?.full_name} (${sample.employee_id})</strong> đang hoạt động ổn định trên hệ thống.`;
             banner.classList.remove('hidden');
         }
     } catch (err) {
