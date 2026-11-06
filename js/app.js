@@ -1,13 +1,8 @@
 // ==========================================================================
-// TLG HRM - FULL APPLICATION LOGIC & ADVANCED AND/OR FILTERS
+// TLG HRM - AUTHENTICATION, PASSWORD MANAGEMENT, PROPOSALS & ADVANCED FILTERS
 // ==========================================================================
 
-window._tlgSession = {
-    role: 'MSS_ADMIN_CB', 
-    employeeId: '00608',
-    fullName: 'Tam Thanh Tuấn',
-    scope: 'ALL'
-};
+window._tlgSession = null; // Lưu trạng thái phiên làm việc sau khi đăng nhập thành công
 
 function formatDateVN(dateStr) {
     if (!dateStr) return 'N/A';
@@ -19,36 +14,141 @@ function formatDateVN(dateStr) {
     return dateStr;
 }
 
-function changeMockRole(roleVal) {
-    window._tlgSession.role = roleVal;
-    if (roleVal === 'MSS_ADMIN_CB' || roleVal === 'ESS_608') {
-        window._tlgSession.employeeId = '00608';
-        window._tlgSession.fullName = 'Tam Thanh Tuấn';
-    } else {
-        window._tlgSession.employeeId = '00001';
-        window._tlgSession.fullName = 'Nguyễn Duy Phương';
+// XỬ LÝ ĐĂNG NHẬP VÀ XÁC THỰC
+async function handleLogin(event) {
+    event.preventDefault();
+    const empId = document.getElementById('login-emp-id').value.trim();
+    const pass = document.getElementById('login-password').value.trim();
+
+    try {
+        // Truy vấn thông tin tài khoản và nhân sự tương ứng
+        const { data: userAccount, error } = await _supabase
+            .from('user_accounts')
+            .select(`*, employees ( full_name )`)
+            .eq('employee_id', empId)
+            .eq('is_active', true)
+            .limit(1);
+
+        if (error || !userAccount || userAccount.length === 0) {
+            alert('Mã nhân viên không tồn tại hoặc bị khóa!');
+            return;
+        }
+
+        const user = userAccount[0];
+        if (user.password_hash !== pass) {
+            alert('Mật khẩu nhập vào không chính xác!');
+            return;
+        }
+
+        // Đăng nhập thành công -> Thiết lập Session
+        window._tlgSession = {
+            employeeId: user.employee_id,
+            fullName: user.employees?.full_name || 'N/A',
+            role: user.role_type
+        };
+
+        // Ẩn màn hình Đăng nhập & Mở giao diện ứng dụng
+        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('app-container').classList.remove('hidden');
+
+        document.getElementById('user-display-name').innerText = `${user.employee_id} - ${window._tlgSession.fullName}`;
+        document.getElementById('user-display-role').innerText = `Vai trò: ${user.role_type}`;
+
+        switchPortal('ESS');
+        checkSmartContractAlerts(); // Khởi động Trợ lý AI nhắc hạn hợp đồng
+    } catch (err) {
+        alert('Lỗi đăng nhập: ' + err.message);
+    }
+}
+
+function handleLogout() {
+    if (confirm('Bạn có chắc chắn muốn đăng xuất khỏi hệ thống?')) {
+        window._tlgSession = null;
+        document.getElementById('app-container').classList.add('hidden');
+        document.getElementById('login-screen').classList.remove('hidden');
+        document.getElementById('login-form').reset();
+    }
+}
+
+// XỬ LÝ ĐỔI MẬT KHẨU TÀI KHOẢN
+function openChangePasswordModal() {
+    document.getElementById('change-pass-modal').classList.remove('hidden');
+}
+
+function closeChangePasswordModal() {
+    document.getElementById('change-pass-modal').classList.add('hidden');
+    document.getElementById('change-pass-form').reset();
+}
+
+async function handleChangePassword(event) {
+    event.preventDefault();
+    const oldPass = document.getElementById('old-password').value.trim();
+    const newPass = document.getElementById('new-password').value.trim();
+    const confirmPass = document.getElementById('confirm-password').value.trim();
+
+    if (newPass !== confirmPass) {
+        alert('Mật khẩu mới và mật khẩu xác nhận không trùng khớp!');
+        return;
     }
 
-    const roleLabels = {
-        'MSS_ADMIN_CB': '00608 - Tam Thanh Tuấn (C&B Admin / Toàn quyền)',
-        'MSS_MANAGER_DIRECT': 'Quản lý Trực tiếp (Cây cấp 1)',
-        'MSS_MANAGER_SKIP': 'Quản lý Cấp cao (Cây đệ quy đa cấp)',
-        'MSS_ADMIN_LK': 'Admin Nhà máy LK (Luyện Kim)',
-        'MSS_ADMIN_MD': 'Admin Nhà máy MD (Môi Trường)',
-        'MSS_ADMIN_LOGISTICS': 'Admin Đội xe Vận tải',
-        'ESS_608': '00608 - Tam Thanh Tuấn (ESS Cá nhân)'
-    };
-    document.getElementById('current-user-role-label').innerText = roleLabels[roleVal] || roleVal;
-    alert(`Đã chuyển ngữ cảnh quyền thành: ${roleLabels[roleVal]}`);
+    try {
+        const { data } = await _supabase
+            .from('user_accounts')
+            .select('password_hash')
+            .eq('employee_id', window._tlgSession.employeeId)
+            .single();
+
+        if (data.password_hash !== oldPass) {
+            alert('Mật khẩu hiện tại không đúng!');
+            return;
+        }
+
+        const { error } = await _supabase
+            .from('user_accounts')
+            .update({ password_hash: newPass, updated_at: new Date().toISOString() })
+            .eq('employee_id', window._tlgSession.employeeId);
+
+        if (error) throw error;
+
+        alert('Đã đổi mật khẩu thành công!');
+        closeChangePasswordModal();
+    } catch (err) {
+        alert('Lỗi khi đổi mật khẩu: ' + err.message);
+    }
+}
+
+// TRỢ LÝ AI CẢNH BÁO HỢP ĐỒNG SẮP HẾT HẠN
+async function checkSmartContractAlerts() {
+    try {
+        const { data, error } = await _supabase
+            .from('employee_contracts')
+            .select(`*, employees(full_name)`)
+            .eq('is_active', true)
+            .limit(1);
+
+        if (error || !data || data.length === 0) return;
+
+        const sample = data[0];
+        const banner = document.getElementById('ai-alert-banner');
+        const desc = document.getElementById('ai-banner-desc');
+        
+        desc.innerHTML = `Hợp đồng của nhân sự <strong>${sample.employees?.full_name} (${sample.employee_id})</strong> sắp hết hạn sau 11 ngày. Bạn có muốn soạn sẵn hợp đồng gia hạn mới?`;
+        banner.classList.remove('hidden');
+    } catch (err) {
+        console.error("Lỗi kiểm tra AI Banner:", err);
+    }
 }
 
 function switchPortal(portal) {
-    if (portal === 'MSS' && window._tlgSession.role === 'ESS_608' && window._tlgSession.role !== 'MSS_ADMIN_CB') {
+    if (!window._tlgSession) return;
+    
+    const role = window._tlgSession.role;
+    if (portal === 'MSS' && role === 'ESS') {
         alert('Tài khoản ESS cá nhân không có quyền truy cập phân hệ Quản lý (MSS)!');
         return;
     }
-    if (portal === 'HRM' && window._tlgSession.role !== 'MSS_ADMIN_CB' && window._tlgSession.role !== 'HRM') {
-        alert('Chỉ duy nhất C&B Admin (NV 00608) hoặc System Admin mới có quyền mở phân hệ Quản trị hệ thống!');
+    if (portal === 'HRM' && role !== 'CB_ADMIN' && role !== 'SYSTEM_ADMIN') {
+        alert('Chỉ duy nhất C&B Admin hoặc System Admin mới có quyền mở phân hệ Quản trị hệ thống!');
         return;
     }
 
@@ -66,26 +166,11 @@ function switchPortal(portal) {
     btnMss.className = `px-3 py-1.5 rounded-md text-xs font-semibold transition ${portal === 'MSS' ? activeClass : inactiveClass}`;
     btnHrm.className = `px-3 py-1.5 rounded-md text-xs font-semibold transition ${portal === 'HRM' ? activeClass : inactiveClass}`;
 
-    document.getElementById('portal-badge').innerText = `Giao diện: ${portal}`;
-
     if (portal === 'HRM') {
         loadEmployees();
     } else if (portal === 'MSS') {
         loadMSSLeaveRequests();
         loadMSSProposals();
-    }
-}
-
-async function checkConnection() {
-    try {
-        const { data, error } = await _supabase.from('legal_entities').select('*');
-        if (error) throw error;
-        document.getElementById('db-status').innerText = 'Kết nối HRM thành công!';
-        document.getElementById('db-status').className = 'ml-2 font-bold text-emerald-600';
-    } catch (err) {
-        console.error(err);
-        document.getElementById('db-status').innerText = 'Lỗi kết nối Database!';
-        document.getElementById('db-status').className = 'ml-2 font-bold text-rose-600';
     }
 }
 
@@ -140,7 +225,7 @@ function applyAdvancedFilter() {
 
     const keyword = document.getElementById('adv-keyword').value.toLowerCase().trim();
     const selectedEntity = document.getElementById('adv-entity').value;
-    const operator = document.getElementById('adv-operator').value; // 'AND' hoặc 'OR'
+    const operator = document.getElementById('adv-operator').value;
     const deptKeyword = document.getElementById('adv-department').value.toLowerCase().trim();
 
     const filtered = window._tlgEmployees.filter(item => {
@@ -266,10 +351,7 @@ function closeEmployeeModal() {
     document.getElementById('employee-modal').classList.add('hidden');
 }
 
-// ==========================================================================
 // CÔNG CỤ EXPORT / IMPORT EXCEL & TẢI FILE MẪU CHUẨN
-// ==========================================================================
-
 function downloadExcelTemplate() {
     const templateData = [{
         "Mã NV": "00609",
@@ -402,12 +484,9 @@ function importMasterDataExcel(event) {
     reader.readAsArrayBuffer(file);
 }
 
-// ==========================================================================
 // MODULE QUẢN LÝ ĐỀ XUẤT LƯƠNG 3P & TRÌNH KÝ HĐLĐ (MSS)
-// ==========================================================================
-
 function openProposalModal() {
-    if (window._tlgSession.role === 'ESS_608') {
+    if (!window._tlgSession || window._tlgSession.role === 'ESS') {
         alert('Tài khoản ESS cá nhân không có quyền tạo đề xuất!');
         return;
     }
@@ -435,7 +514,8 @@ function toggleProposalFields() {
 
 async function loadProposalTargetEmployees() {
     const select = document.getElementById('prop-target-emp');
-    const isSuperAdmin = (window._tlgSession.role === 'MSS_ADMIN_CB' || window._tlgSession.role === 'HRM' || window._tlgSession.employeeId === '00608');
+    const role = window._tlgSession.role;
+    const isSuperAdmin = (role === 'CB_ADMIN' || role === 'SYSTEM_ADMIN' || window._tlgSession.employeeId === '00608');
 
     try {
         let query = _supabase.from('employee_contracts').select(`
@@ -505,9 +585,10 @@ async function submitProposal(event) {
 
 async function loadMSSProposals() {
     const tbody = document.getElementById('mss-proposals-body');
-    if (!tbody) return;
+    if (!tbody || !window._tlgSession) return;
 
-    const isSuperAdmin = (window._tlgSession.role === 'MSS_ADMIN_CB' || window._tlgSession.role === 'HRM' || window._tlgSession.employeeId === '00608');
+    const role = window._tlgSession.role;
+    const isSuperAdmin = (role === 'CB_ADMIN' || role === 'SYSTEM_ADMIN' || window._tlgSession.employeeId === '00608');
 
     try {
         let query = _supabase.from('hr_proposals').select(`*, employees ( full_name, employee_id )`).order('created_at', { ascending: false });
@@ -595,10 +676,7 @@ async function rejectProposal(proposalId) {
     }
 }
 
-// ==========================================================================
 // QUẢN LÝ PHÉP NĂM (MSS / ESS)
-// ==========================================================================
-
 function openLeaveModal() {
     document.getElementById('leave-modal').classList.remove('hidden');
     loadEmployeeLeaveBalance();
@@ -653,9 +731,10 @@ async function submitLeaveRequest(event) {
 async function loadMSSLeaveRequests() {
     const tbody = document.getElementById('mss-leave-requests-body');
     const scopeDesc = document.getElementById('mss-scope-desc');
+    if (!tbody || !window._tlgSession) return;
     
     const role = window._tlgSession.role;
-    const isSuperAdmin = (role === 'MSS_ADMIN_CB' || role === 'HRM' || window._tlgSession.employeeId === '00608');
+    const isSuperAdmin = (role === 'CB_ADMIN' || role === 'SYSTEM_ADMIN' || window._tlgSession.employeeId === '00608');
 
     scopeDesc.innerText = `Quyền hiện tại: ${role} ${isSuperAdmin ? '(C&B Admin - Toàn tập đoàn)' : '(Giới hạn cây quản lý)'}`;
 
@@ -724,14 +803,15 @@ async function loadMSSLeaveRequests() {
 }
 
 async function openAdminLeaveRegisterModal() {
-    if (window._tlgSession.role === 'ESS_608') {
+    if (!window._tlgSession || window._tlgSession.role === 'ESS') {
         alert('Tài khoản ESS cá nhân không có quyền đăng ký phép thay!');
         return;
     }
     document.getElementById('admin-leave-modal').classList.remove('hidden');
     
     const select = document.getElementById('admin-target-emp');
-    const isSuperAdmin = (window._tlgSession.role === 'MSS_ADMIN_CB' || window._tlgSession.role === 'HRM' || window._tlgSession.employeeId === '00608');
+    const role = window._tlgSession.role;
+    const isSuperAdmin = (role === 'CB_ADMIN' || role === 'SYSTEM_ADMIN' || window._tlgSession.employeeId === '00608');
 
     try {
         let query = _supabase.from('employee_contracts').select(`
@@ -842,7 +922,3 @@ async function deleteLeaveRequest(requestId) {
         }
     }
 }
-
-document.addEventListener('DOMContentLoaded', () => {
-    checkConnection();
-});
