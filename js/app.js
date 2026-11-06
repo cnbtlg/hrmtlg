@@ -524,7 +524,7 @@ function downloadExcelTemplate() {
         "Số CCCD": "079090012345",
         "Mã Số Thuế": "8281234567",
         "Địa Chỉ": "123 Nguyễn Trãi, Quận 5, TP.HCM",
-        "Pháp Nhân (TL/MD/KT/XM)": "TL",
+        "Pháp Nhân": "TL",
         "Số HĐLĐ": "00609-1/HDLD-TL",
         "Chức Danh": "Kỹ thuật viên vận hành",
         "Phòng Ban": "Xưởng Luyện Kim",
