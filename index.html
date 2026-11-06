@@ -15,257 +15,288 @@
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans min-h-screen">
 
-    <!-- Header Navigation -->
-    <header class="bg-slate-900 text-white shadow-md">
-        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <div class="flex items-center space-x-3">
-                <span class="text-2xl font-bold text-blue-400">TLG</span>
-                <span class="text-slate-400">|</span>
-                <span class="text-lg font-medium">Hệ Thống Quản Trị Nhân Sự & C&B</span>
+    <!-- Screen 1: Màn hình Đăng Nhập Hệ Thống -->
+    <div id="login-screen" class="fixed inset-0 bg-slate-900 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-8 shadow-2xl space-y-6 border border-slate-800">
+            <div class="text-center space-y-2">
+                <span class="text-4xl font-extrabold text-blue-600 tracking-wider">TLG GROUP</span>
+                <h2 class="text-xl font-bold text-slate-800">Đăng Nhập Hệ Thống HRM</h2>
+                <p class="text-xs text-slate-500">Quản trị Nhân sự, C&B & Vận hành Tập đoàn</p>
             </div>
-            
-            <!-- Khu vực giả lập vai trò đăng nhập -->
-            <div class="flex items-center space-x-3">
-                <div class="text-xs text-slate-300 hidden md:block">
-                    Vai trò: <span id="current-user-role-label" class="font-bold text-amber-400">NV 00608 - C&B Admin</span>
+
+            <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Mã Nhân Viên (Username):</label>
+                    <input type="text" id="login-emp-id" placeholder="Nhập mã NV (VD: 00608)" required 
+                        class="w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50">
                 </div>
-                <div class="flex space-x-2 bg-slate-800 p-1 rounded-lg">
-                    <button id="btn-ess" onclick="switchPortal('ESS')" class="px-3 py-1.5 rounded-md text-xs font-semibold transition bg-blue-600 text-white shadow">
-                        [ESS] Cá nhân
-                    </button>
-                    <button id="btn-mss" onclick="switchPortal('MSS')" class="px-3 py-1.5 rounded-md text-xs font-semibold transition text-slate-300 hover:text-white">
-                        [MSS] Quản lý
-                    </button>
-                    <button id="btn-hrm" onclick="switchPortal('HRM')" class="px-3 py-1.5 rounded-md text-xs font-semibold transition text-slate-300 hover:text-white">
-                        [HRM] Quản trị
-                    </button>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Mật Khẩu:</label>
+                    <input type="password" id="login-password" placeholder="Nhập mật khẩu..." required 
+                        class="w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50">
                 </div>
+                <button type="submit" class="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition shadow-lg text-sm">
+                    Đăng Nhập Vận Hành
+                </button>
+            </form>
+            <div class="text-center border-t pt-3">
+                <span class="text-[11px] text-slate-400">Mặc định tài khoản test C&B: 00608 / Pass: 123456</span>
             </div>
         </div>
-    </header>
+    </div>
 
-    <!-- Main Content Area -->
-    <main class="max-w-7xl mx-auto px-4 py-8 space-y-6">
-        
-        <!-- Status Indicator & Session Info -->
-        <div class="p-4 rounded-xl border bg-white shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
-            <div>
-                <span class="text-sm font-medium text-slate-500">Trạng thái kết nối:</span>
-                <span id="db-status" class="ml-2 font-bold text-amber-500">Đang kiểm tra...</span>
-            </div>
-            <div class="flex items-center space-x-3">
-                <span class="text-xs font-semibold text-slate-600">Ngữ cảnh Test Quyền:</span>
-                <select id="mock-role-selector" onchange="changeMockRole(this.value)" class="px-2 py-1 border rounded text-xs bg-slate-50 font-medium">
-                    <option value="MSS_ADMIN_CB">00608 - Tam Thanh Tuấn (C&B Admin / Toàn quyền)</option>
-                    <option value="MSS_MANAGER_DIRECT">Quản lý Trực tiếp (Cây cấp 1)</option>
-                    <option value="MSS_MANAGER_SKIP">Quản lý Cấp cao (Cây đệ quy đa cấp)</option>
-                    <option value="MSS_ADMIN_LK">Admin Nhà máy LK (Luyện Kim)</option>
-                    <option value="MSS_ADMIN_MD">Admin Nhà máy MD (Môi Trường)</option>
-                    <option value="MSS_ADMIN_LOGISTICS">Admin Đội xe Vận tải</option>
-                    <option value="ESS_608">NV 00608 (ESS Cá nhân)</option>
-                </select>
-            </div>
-            <div id="portal-badge" class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-bold uppercase">
-                Giao diện: ESS
-            </div>
-        </div>
-
-        <!-- ESS Portal Section -->
-        <section id="portal-ess" class="portal-section space-y-6">
-            <h2 class="text-2xl font-bold text-slate-900">Giao diện Nhân viên (ESS)</h2>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="bg-white p-6 rounded-xl shadow-sm border hover:shadow-md transition">
-                    <h3 class="font-bold text-lg text-slate-800 mb-2">Thông Tin Cá Nhân</h3>
-                    <p class="text-slate-600 text-sm mb-4">Tra cứu lý lịch, hợp đồng lao động và quá trình công tác.</p>
-                    <button class="w-full py-2 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 text-sm">Xem Hồ Sơ</button>
+    <!-- Screen 2: Giao diện Chính sau khi Đăng Nhập -->
+    <div id="app-container" class="hidden">
+        <!-- Header Navigation -->
+        <header class="bg-slate-900 text-white shadow-md">
+            <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+                <div class="flex items-center space-x-3">
+                    <span class="text-2xl font-bold text-blue-400">TLG</span>
+                    <span class="text-slate-400">|</span>
+                    <span class="text-lg font-medium">Hệ Thống Quản Trị Nhân Sự & C&B</span>
                 </div>
-                <div class="bg-white p-6 rounded-xl shadow-sm border hover:shadow-md transition">
-                    <h3 class="font-bold text-lg text-slate-800 mb-2">Số Dư Phép & Nghỉ Phép</h3>
-                    <p class="text-slate-600 text-sm mb-4">Theo dõi phép năm, phép thâm niên và phép tồn (hạn chót Hết Quý 2).</p>
-                    <button onclick="openLeaveModal()" class="w-full py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 text-sm">Tra Cứu & Đăng Ký Phép</button>
-                </div>
-                <div class="bg-white p-6 rounded-xl shadow-sm border hover:shadow-md transition">
-                    <h3 class="font-bold text-lg text-slate-800 mb-2">Phiếu Lương & Chấm Công</h3>
-                    <p class="text-slate-600 text-sm mb-4">Xem chi tiết bảng lương hằng tháng và công nhật làm việc.</p>
-                    <button class="w-full py-2 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 text-sm">Xem Phiếu Lương</button>
-                </div>
-            </div>
-        </section>
-
-        <!-- MSS Portal Section -->
-        <section id="portal-mss" class="portal-section space-y-6 hidden">
-            <h2 class="text-2xl font-bold text-slate-900">Giao diện Quản lý & Admin Bộ Phận (MSS)</h2>
-            
-            <!-- Tab 1: Duyệt & Đăng ký Phép -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border space-y-4">
-                <div class="flex flex-col md:flex-row justify-between md:items-center border-b pb-3 gap-2">
-                    <div>
-                        <h3 class="font-bold text-lg text-slate-800">1. Quản Lý Phép & Duyệt Đơn (Phân Quyền Cây Quản Lý)</h3>
-                        <p id="mss-scope-desc" class="text-xs text-slate-500 mt-1">Phạm vi quản lý: Đang quét danh sách nhân sự cấp dưới...</p>
+                
+                <div class="flex items-center space-x-4">
+                    <div class="text-xs text-slate-300 hidden md:block text-right">
+                        <div>Đang đăng nhập: <span id="user-display-name" class="font-bold text-amber-400">...</span></div>
+                        <div class="text-[10px] text-slate-400" id="user-display-role">Chức vụ: ...</div>
                     </div>
-                    <button onclick="openAdminLeaveRegisterModal()" class="px-4 py-2 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 text-sm self-start md:self-auto">
-                        + Đăng Ký Phép Thay Cho Cấp Dưới
-                    </button>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm border-collapse">
-                        <thead>
-                            <tr class="bg-slate-50 border-b">
-                                <th class="p-3 font-semibold text-slate-600">Mã NV</th>
-                                <th class="p-3 font-semibold text-slate-600">Họ và Tên</th>
-                                <th class="p-3 font-semibold text-slate-600">Loại Nghỉ</th>
-                                <th class="p-3 font-semibold text-slate-600">Thời Gian</th>
-                                <th class="p-3 font-semibold text-slate-600">Lý Do</th>
-                                <th class="p-3 font-semibold text-slate-600">Trạng Thái</th>
-                                <th class="p-3 font-semibold text-slate-600">Thao Tác</th>
-                            </tr>
-                        </thead>
-                        <tbody id="mss-leave-requests-body">
-                            <tr><td colspan="7" class="p-4 text-center text-slate-400">Đang tải dữ liệu...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Tab 2: Đề xuất Điều chỉnh Lương 3P & Trình ký HĐLĐ -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border space-y-4">
-                <div class="flex flex-col md:flex-row justify-between md:items-center border-b pb-3 gap-2">
-                    <div>
-                        <h3 class="font-bold text-lg text-slate-800">2. Đề Xuất Điều Chỉnh Lương 3P & Trình Ký HĐLĐ</h3>
-                        <p class="text-xs text-slate-500 mt-1">Lập đề xuất cho nhân sự trong cây quản lý - Chờ C&B thẩm định & BOD phê duyệt</p>
-                    </div>
-                    <button onclick="openProposalModal()" class="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 text-sm self-start md:self-auto">
-                        + Tạo Đề Xuất / Trình Ký Mới
-                    </button>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm border-collapse">
-                        <thead>
-                            <tr class="bg-slate-50 border-b">
-                                <th class="p-3 font-semibold text-slate-600">Loại Đề Xuất</th>
-                                <th class="p-3 font-semibold text-slate-600">Mã NV - Họ Tên</th>
-                                <th class="p-3 font-semibold text-slate-600">Nội Dung Đề Xuất</th>
-                                <th class="p-3 font-semibold text-slate-600">Lý Do / Đánh Giá</th>
-                                <th class="p-3 font-semibold text-slate-600">Trạng Thái</th>
-                                <th class="p-3 font-semibold text-slate-600">Thao Tác</th>
-                            </tr>
-                        </thead>
-                        <tbody id="mss-proposals-body">
-                            <tr><td colspan="6" class="p-4 text-center text-slate-400">Đang tải danh sách đề xuất...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-
-        <!-- HRM Admin Portal Section -->
-        <section id="portal-hrm" class="portal-section space-y-6 hidden">
-            <div class="flex justify-between items-center">
-                <h2 class="text-2xl font-bold text-slate-900">Giao diện Quản trị Master Data (/Quản trị)</h2>
-                <span class="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-xs font-bold">Chỉ dành cho C&B Admin & System Admin</span>
-            </div>
-
-            <!-- Dashboard Tổng quan 4 Pháp nhân & 3 Khối ngành -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div class="bg-white p-4 rounded-xl border shadow-sm">
-                    <span class="text-xs font-semibold text-slate-500 block">TL - Luyện Kim Thăng Long</span>
-                    <strong class="text-xl font-bold text-blue-600">Nhà máy & VP</strong>
-                    <span class="text-[10px] text-slate-400 block mt-1">Sản xuất kim loại / Ca kíp</span>
-                </div>
-                <div class="bg-white p-4 rounded-xl border shadow-sm">
-                    <span class="text-xs font-semibold text-slate-500 block">MD - Môi Trường Miền Đông</span>
-                    <strong class="text-xl font-bold text-emerald-600">Xử lý chất thải</strong>
-                    <span class="text-[10px] text-slate-400 block mt-1">Phụ cấp độc hại & BHLĐ</span>
-                </div>
-                <div class="bg-white p-4 rounded-xl border shadow-sm">
-                    <span class="text-xs font-semibold text-slate-500 block">KT - Kim Thăng Long</span>
-                    <strong class="text-xl font-bold text-purple-600">Gia công & Thương mại</strong>
-                    <span class="text-[10px] text-slate-400 block mt-1">Khối kỹ thuật & vận hành</span>
-                </div>
-                <div class="bg-white p-4 rounded-xl border shadow-sm">
-                    <span class="text-xs font-semibold text-slate-500 block">XM - XNK Miền Đông</span>
-                    <strong class="text-xl font-bold text-amber-600">Đội xe Vận tải</strong>
-                    <span class="text-[10px] text-slate-400 block mt-1">Tài xế, phụ xe & thu gom</span>
-                </div>
-            </div>
-
-            <!-- Master Data Nhân sự & Bộ lọc Nâng cao AND/OR -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border space-y-4">
-                <div class="flex flex-col md:flex-row justify-between items-center gap-4 border-b pb-4">
-                    <h3 class="font-bold text-lg text-slate-800">Quản Lý Master Data & Bảng Lương C&B</h3>
                     
-                    <div class="flex flex-wrap items-center gap-2">
-                        <button onclick="downloadExcelTemplate()" class="px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 flex items-center gap-1 shadow-sm">
-                            📋 Tải File Mẫu Import Excel
+                    <div class="flex space-x-2 bg-slate-800 p-1 rounded-lg">
+                        <button id="btn-ess" onclick="switchPortal('ESS')" class="px-3 py-1.5 rounded-md text-xs font-semibold transition bg-blue-600 text-white shadow">
+                            [ESS] Cá nhân
                         </button>
-                        <button onclick="exportMasterDataExcel()" class="px-3 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 flex items-center gap-1 shadow-sm">
-                            📥 Xuất Excel Dữ Liệu
+                        <button id="btn-mss" onclick="switchPortal('MSS')" class="px-3 py-1.5 rounded-md text-xs font-semibold transition text-slate-300 hover:text-white">
+                            [MSS] Quản lý
                         </button>
-                        <label class="px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 cursor-pointer flex items-center gap-1 shadow-sm">
-                            📤 Nhập Excel Hàng Loạt
-                            <input type="file" id="import-excel-file" accept=".xlsx, .xls, .csv" onchange="importMasterDataExcel(event)" class="hidden">
-                        </label>
+                        <button id="btn-hrm" onclick="switchPortal('HRM')" class="px-3 py-1.5 rounded-md text-xs font-semibold transition text-slate-300 hover:text-white">
+                            [HRM] Quản trị
+                        </button>
                     </div>
-                </div>
 
-                <!-- Khung Bộ Lọc Nâng Cao AND / OR -->
-                <div class="bg-slate-50 p-4 rounded-xl border space-y-3">
-                    <div class="flex justify-between items-center">
-                        <span class="text-xs font-bold text-slate-700 uppercase">Bộ lọc điều kiện đa chiều (AND / OR):</span>
-                        <button onclick="resetAdvancedFilter()" class="text-xs text-rose-600 font-semibold hover:underline">Xóa bộ lọc</button>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-                        <div>
-                            <label class="block text-[11px] font-semibold text-slate-500 mb-1">Từ khóa (Mã NV / Họ tên):</label>
-                            <input type="text" id="adv-keyword" placeholder="Nhập từ khóa..." oninput="applyAdvancedFilter()" 
-                                class="w-full px-3 py-1.5 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-[11px] font-semibold text-slate-500 mb-1">Pháp nhân (Legal Entity):</label>
-                            <select id="adv-entity" onchange="applyAdvancedFilter()" class="w-full px-3 py-1.5 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                <option value="">-- Tất cả Pháp nhân --</option>
-                                <option value="MD">MD - Môi Trường Miền Đông</option>
-                                <option value="TL">TL - Luyện Kim Thăng Long</option>
-                                <option value="KT">KT - Kim Thăng Long</option>
-                                <option value="XM">XM - XNK Miền Đông</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-[11px] font-semibold text-slate-500 mb-1">Toán tử logic kết hợp:</label>
-                            <select id="adv-operator" onchange="applyAdvancedFilter()" class="w-full px-3 py-1.5 border rounded-lg text-sm bg-blue-50 text-blue-800 font-bold focus:outline-none">
-                                <option value="AND">AND (Thỏa mãn tất cả điều kiện)</option>
-                                <option value="OR">OR (Thỏa mãn bất kỳ điều kiện)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-[11px] font-semibold text-slate-500 mb-1">Phòng ban / Xưởng / Đội xe:</label>
-                            <input type="text" id="adv-department" placeholder="VD: Luyện Kim, Vận tải..." oninput="applyAdvancedFilter()" 
-                                class="w-full px-3 py-1.5 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm border-collapse">
-                        <thead>
-                            <tr class="bg-slate-50 border-b">
-                                <th class="p-3 font-semibold text-slate-600">Mã NV</th>
-                                <th class="p-3 font-semibold text-slate-600">Họ và Tên</th>
-                                <th class="p-3 font-semibold text-slate-600">Pháp Nhân</th>
-                                <th class="p-3 font-semibold text-slate-600">Chức Danh</th>
-                                <th class="p-3 font-semibold text-slate-600">Phòng Ban / Đơn Vị</th>
-                                <th class="p-3 font-semibold text-slate-600">Thao tác</th>
-                            </tr>
-                        </thead>
-                        <tbody id="employees-table-body">
-                            <tr><td colspan="6" class="p-4 text-center text-slate-400">Đang tải danh sách nhân sự...</td></tr>
-                        </tbody>
-                    </table>
+                    <button onclick="openChangePasswordModal()" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-semibold">
+                        🔒 Đổi mật khẩu
+                    </button>
+                    <button onclick="handleLogout()" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold">
+                        Đăng xuất
+                    </button>
                 </div>
             </div>
-        </section>
+        </header>
 
-    </main>
+        <!-- Main Content Area -->
+        <main class="max-w-7xl mx-auto px-4 py-8 space-y-6">
+            
+            <!-- Trợ lý Cảnh báo Hợp đồng Thông minh (Smart AI Banner) -->
+            <div id="ai-alert-banner" class="hidden p-4 rounded-xl bg-amber-50 border border-amber-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-3">
+                <div class="flex items-center space-x-3">
+                    <span class="text-2xl">✨</span>
+                    <div>
+                        <strong class="text-slate-800 text-sm font-bold block" id="ai-banner-title">Cảnh báo Trợ lý Nhân sự</strong>
+                        <p class="text-xs text-slate-600" id="ai-banner-desc">Đang kiểm tra thời hạn hợp đồng lao động...</p>
+                    </div>
+                </div>
+                <button onclick="openProposalModal()" class="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 shadow self-end md:self-auto">
+                    Soạn Ngay
+                </button>
+            </div>
+
+            <!-- ESS Portal Section -->
+            <section id="portal-ess" class="portal-section space-y-6">
+                <h2 class="text-2xl font-bold text-slate-900">Giao diện Nhân viên (ESS)</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-white p-6 rounded-xl shadow-sm border hover:shadow-md transition">
+                        <h3 class="font-bold text-lg text-slate-800 mb-2">Thông Tin Cá Nhân</h3>
+                        <p class="text-slate-600 text-sm mb-4">Tra cứu lý lịch, hợp đồng lao động và quá trình công tác.</p>
+                        <button class="w-full py-2 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 text-sm">Xem Hồ Sơ</button>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border hover:shadow-md transition">
+                        <h3 class="font-bold text-lg text-slate-800 mb-2">Số Dư Phép & Nghỉ Phép</h3>
+                        <p class="text-slate-600 text-sm mb-4">Theo dõi phép năm, phép thâm niên và phép tồn (hạn chót Hết Quý 2).</p>
+                        <button onclick="openLeaveModal()" class="w-full py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 text-sm">Tra Cứu & Đăng Ký Phép</button>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border hover:shadow-md transition">
+                        <h3 class="font-bold text-lg text-slate-800 mb-2">Phiếu Lương & Chấm Công</h3>
+                        <p class="text-slate-600 text-sm mb-4">Xem chi tiết bảng lương hằng tháng và công nhật làm việc.</p>
+                        <button class="w-full py-2 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 text-sm">Xem Phiếu Lương</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- MSS Portal Section -->
+            <section id="portal-mss" class="portal-section space-y-6 hidden">
+                <h2 class="text-2xl font-bold text-slate-900">Giao diện Quản lý & Admin Bộ Phận (MSS)</h2>
+                
+                <div class="bg-white p-6 rounded-xl shadow-sm border space-y-4">
+                    <div class="flex flex-col md:flex-row justify-between md:items-center border-b pb-3 gap-2">
+                        <div>
+                            <h3 class="font-bold text-lg text-slate-800">1. Quản Lý Phép & Duyệt Đơn (Phân Quyền Cây Quản Lý)</h3>
+                            <p id="mss-scope-desc" class="text-xs text-slate-500 mt-1">Phạm vi quản lý: Đang quét cây nhân sự...</p>
+                        </div>
+                        <button onclick="openAdminLeaveRegisterModal()" class="px-4 py-2 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 text-sm self-start md:self-auto">
+                            + Đăng Ký Phép Thay Cho Cấp Dưới
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 border-b">
+                                    <th class="p-3 font-semibold text-slate-600">Mã NV</th>
+                                    <th class="p-3 font-semibold text-slate-600">Họ và Tên</th>
+                                    <th class="p-3 font-semibold text-slate-600">Loại Nghỉ</th>
+                                    <th class="p-3 font-semibold text-slate-600">Thời Gian</th>
+                                    <th class="p-3 font-semibold text-slate-600">Lý Do</th>
+                                    <th class="p-3 font-semibold text-slate-600">Trạng Thái</th>
+                                    <th class="p-3 font-semibold text-slate-600">Thao Tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mss-leave-requests-body">
+                                <tr><td colspan="7" class="p-4 text-center text-slate-400">Đang tải dữ liệu...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl shadow-sm border space-y-4">
+                    <div class="flex flex-col md:flex-row justify-between md:items-center border-b pb-3 gap-2">
+                        <div>
+                            <h3 class="font-bold text-lg text-slate-800">2. Đề Xuất Điều Chỉnh Lương 3P & Trình Ký HĐLĐ</h3>
+                            <p class="text-xs text-slate-500 mt-1">Lập đề xuất cho nhân sự trong cây quản lý - Chờ C&B thẩm định & BOD phê duyệt</p>
+                        </div>
+                        <button onclick="openProposalModal()" class="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 text-sm self-start md:self-auto">
+                            + Tạo Đề Xuất / Trình Ký Mới
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 border-b">
+                                    <th class="p-3 font-semibold text-slate-600">Loại Đề Xuất</th>
+                                    <th class="p-3 font-semibold text-slate-600">Mã NV - Họ Tên</th>
+                                    <th class="p-3 font-semibold text-slate-600">Nội Dung Đề Xuất</th>
+                                    <th class="p-3 font-semibold text-slate-600">Lý Do / Đánh Giá</th>
+                                    <th class="p-3 font-semibold text-slate-600">Trạng Thái</th>
+                                    <th class="p-3 font-semibold text-slate-600">Thao Tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mss-proposals-body">
+                                <tr><td colspan="6" class="p-4 text-center text-slate-400">Đang tải danh sách đề xuất...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- HRM Admin Portal Section -->
+            <section id="portal-hrm" class="portal-section space-y-6 hidden">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-2xl font-bold text-slate-900">Giao diện Quản trị Master Data (/Quản trị)</h2>
+                    <span class="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-xs font-bold">Dành cho C&B Admin & System Admin</span>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl shadow-sm border space-y-4">
+                    <div class="flex flex-col md:flex-row justify-between items-center gap-4 border-b pb-4">
+                        <h3 class="font-bold text-lg text-slate-800">Quản Lý Master Data & Bảng Lương C&B</h3>
+                        
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button onclick="downloadExcelTemplate()" class="px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 flex items-center gap-1 shadow-sm">
+                                📋 Tải File Mẫu
+                            </button>
+                            <button onclick="exportMasterDataExcel()" class="px-3 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 flex items-center gap-1 shadow-sm">
+                                📥 Xuất Excel
+                            </button>
+                            <label class="px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 cursor-pointer flex items-center gap-1 shadow-sm">
+                                📤 Nhập Excel
+                                <input type="file" id="import-excel-file" accept=".xlsx, .xls, .csv" onchange="importMasterDataExcel(event)" class="hidden">
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Khung Bộ Lọc Nâng Cao AND / OR -->
+                    <div class="bg-slate-50 p-4 rounded-xl border space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs font-bold text-slate-700 uppercase">Bộ lọc điều kiện đa chiều (AND / OR):</span>
+                            <button onclick="resetAdvancedFilter()" class="text-xs text-rose-600 font-semibold hover:underline">Xóa bộ lọc</button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                            <div>
+                                <label class="block text-[11px] font-semibold text-slate-500 mb-1">Từ khóa (Mã NV / Họ tên):</label>
+                                <input type="text" id="adv-keyword" placeholder="Nhập từ khóa..." oninput="applyAdvancedFilter()" 
+                                    class="w-full px-3 py-1.5 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-semibold text-slate-500 mb-1">Pháp nhân (Legal Entity):</label>
+                                <select id="adv-entity" onchange="applyAdvancedFilter()" class="w-full px-3 py-1.5 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="">-- Tất cả Pháp nhân --</option>
+                                    <option value="MD">MD - Môi Trường Miền Đông</option>
+                                    <option value="TL">TL - Luyện Kim Thăng Long</option>
+                                    <option value="KT">KT - Kim Thăng Long</option>
+                                    <option value="XM">XM - XNK Miền Đông</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-semibold text-slate-500 mb-1">Toán tử logic kết hợp:</label>
+                                <select id="adv-operator" onchange="applyAdvancedFilter()" class="w-full px-3 py-1.5 border rounded-lg text-sm bg-blue-50 text-blue-800 font-bold focus:outline-none">
+                                    <option value="AND">AND (Thỏa mãn tất cả điều kiện)</option>
+                                    <option value="OR">OR (Thỏa mãn bất kỳ điều kiện)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-semibold text-slate-500 mb-1">Phòng ban / Xưởng / Đội xe:</label>
+                                <input type="text" id="adv-department" placeholder="VD: Luyện Kim, Vận tải..." oninput="applyAdvancedFilter()" 
+                                    class="w-full px-3 py-1.5 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 border-b">
+                                    <th class="p-3 font-semibold text-slate-600">Mã NV</th>
+                                    <th class="p-3 font-semibold text-slate-600">Họ và Tên</th>
+                                    <th class="p-3 font-semibold text-slate-600">Pháp Nhân</th>
+                                    <th class="p-3 font-semibold text-slate-600">Chức Danh</th>
+                                    <th class="p-3 font-semibold text-slate-600">Phòng Ban / Đơn Vị</th>
+                                    <th class="p-3 font-semibold text-slate-600">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="employees-table-body">
+                                <tr><td colspan="6" class="p-4 text-center text-slate-400">Đang tải danh sách nhân sự...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Modal Đổi Mật Khẩu -->
+    <div id="change-pass-modal" class="fixed inset-0 bg-slate-900/50 hidden flex items-center justify-center p-4 z-50 overflow-y-auto">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-lg font-bold text-slate-900">Đổi Mật Khẩu Tài Khoản</h3>
+                <button onclick="closeChangePasswordModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
+            </div>
+            
+            <form id="change-pass-form" onsubmit="handleChangePassword(event)" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Mật khẩu hiện tại:</label>
+                    <input type="password" id="old-password" required class="w-full px-3 py-2 border rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Mật khẩu mới:</label>
+                    <input type="password" id="new-password" required minlength="6" class="w-full px-3 py-2 border rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Xác nhận mật khẩu mới:</label>
+                    <input type="password" id="confirm-password" required minlength="6" class="w-full px-3 py-2 border rounded-lg text-sm">
+                </div>
+                <button type="submit" class="w-full py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 text-sm">Lưu Mật Khẩu Mới</button>
+            </form>
+        </div>
+    </div>
 
     <!-- Modal Chi Tiết Hồ Sơ & Cơ Cấu Lương Nhân Sự -->
     <div id="employee-modal" class="fixed inset-0 bg-slate-900/50 hidden flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -279,174 +310,6 @@
 
             <div class="flex justify-end pt-3 border-t">
                 <button onclick="closeEmployeeModal()" class="px-5 py-2 bg-slate-200 text-slate-700 font-semibold rounded-lg hover:bg-slate-300 text-sm">Đóng</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal Quản Lý Phép Năm (ESS) -->
-    <div id="leave-modal" class="fixed inset-0 bg-slate-900/50 hidden flex items-center justify-center p-4 z-50 overflow-y-auto">
-        <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-xl space-y-6 my-8">
-            <div class="flex justify-between items-center border-b pb-3">
-                <h3 class="text-xl font-bold text-slate-900">Quản Lý Phép Năm & Đăng Ký Nghỉ Phép (ESS)</h3>
-                <button onclick="closeLeaveModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
-            </div>
-            
-            <div class="space-y-4">
-                <div class="bg-slate-50 p-4 rounded-xl border space-y-2">
-                    <h4 class="font-bold text-slate-700 text-sm">Số Dư Phép Năm Hiện Tại (Quy tắc Q2):</h4>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
-                        <div class="bg-white p-3 rounded-lg border">
-                            <span class="text-xs text-slate-500 block">Phép chuẩn</span>
-                            <strong id="lbl-annual" class="text-lg text-blue-600">12.0</strong>
-                        </div>
-                        <div class="bg-white p-3 rounded-lg border">
-                            <span class="text-xs text-slate-500 block">Phép thâm niên</span>
-                            <strong id="lbl-seniority" class="text-lg text-emerald-600">0.0</strong>
-                        </div>
-                        <div class="bg-white p-3 rounded-lg border">
-                            <span class="text-xs text-slate-500 block">Phép tồn (Hạn Q2)</span>
-                            <strong id="lbl-carried" class="text-lg text-amber-600">0.0</strong>
-                        </div>
-                        <div class="bg-white p-3 rounded-lg border">
-                            <span class="text-xs text-slate-500 block">Đã nghỉ</span>
-                            <strong id="lbl-used" class="text-lg text-rose-600">0.0</strong>
-                        </div>
-                    </div>
-                </div>
-
-                <form id="leave-form" onsubmit="submitLeaveRequest(event)" class="space-y-3 pt-2">
-                    <h4 class="font-bold text-slate-700 text-sm">Tạo Đơn Xin Nghỉ Phép Cá Nhân:</h4>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-600 mb-1">Từ ngày:</label>
-                            <input type="date" id="leave-start" required class="w-full px-3 py-2 border rounded-lg text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-600 mb-1">Đến ngày:</label>
-                            <input type="date" id="leave-end" required class="w-full px-3 py-2 border rounded-lg text-sm">
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">Lý do nghỉ:</label>
-                        <textarea id="leave-reason" rows="2" placeholder="Nhập lý do nghỉ phép..." required class="w-full px-3 py-2 border rounded-lg text-sm"></textarea>
-                    </div>
-                    <button type="submit" class="w-full py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 text-sm">Gửi Đơn Xin Nghỉ Phép</button>
-                </form>
-            </div>
-
-            <div class="flex justify-end pt-3 border-t">
-                <button onclick="closeLeaveModal()" class="px-5 py-2 bg-slate-200 text-slate-700 font-semibold rounded-lg hover:bg-slate-300 text-sm">Đóng</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal Admin/Manager Đăng Ký Phép Thay (MSS) -->
-    <div id="admin-leave-modal" class="fixed inset-0 bg-slate-900/50 hidden flex items-center justify-center p-4 z-50 overflow-y-auto">
-        <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-xl space-y-6 my-8">
-            <div class="flex justify-between items-center border-b pb-3">
-                <h3 class="text-xl font-bold text-slate-900">Đăng Ký Phép Thay (Theo Phạm Vi Quản Lý)</h3>
-                <button onclick="closeAdminLeaveModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
-            </div>
-            
-            <form id="admin-leave-form" onsubmit="submitAdminLeaveRequest(event)" class="space-y-4">
-                <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1">Chọn nhân sự thuộc cây quản lý của bạn:</label>
-                    <select id="admin-target-emp" required class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
-                        <option value="">-- Đang quét nhân sự cấp dưới... --</option>
-                    </select>
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">Từ ngày:</label>
-                        <input type="date" id="admin-leave-start" required class="w-full px-3 py-2 border rounded-lg text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">Đến ngày:</label>
-                        <input type="date" id="admin-leave-end" required class="w-full px-3 py-2 border rounded-lg text-sm">
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1">Lý do nghỉ / Ghi chú:</label>
-                    <textarea id="admin-leave-reason" rows="2" placeholder="Nhập lý do đăng ký thay..." required class="w-full px-3 py-2 border rounded-lg text-sm"></textarea>
-                </div>
-                <button type="submit" class="w-full py-2.5 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 text-sm">Xác Nhận Đăng Ký & Phê Duyệt Phép</button>
-            </form>
-
-            <div class="flex justify-end pt-3 border-t">
-                <button onclick="closeAdminLeaveModal()" class="px-5 py-2 bg-slate-200 text-slate-700 font-semibold rounded-lg hover:bg-slate-300 text-sm">Đóng</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal Lập Đề Xuất Điều Chỉnh Lương 3P & Trình Ký HĐLĐ (MSS) -->
-    <div id="proposal-modal" class="fixed inset-0 bg-slate-900/50 hidden flex items-center justify-center p-4 z-50 overflow-y-auto">
-        <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-xl space-y-6 my-8">
-            <div class="flex justify-between items-center border-b pb-3">
-                <h3 class="text-xl font-bold text-slate-900">Lập Đề Xuất Điều Chỉnh Lương 3P / Trình Ký HĐLĐ</h3>
-                <button onclick="closeProposalModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
-            </div>
-            
-            <form id="proposal-form" onsubmit="submitProposal(event)" class="space-y-4">
-                <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1">Loại đề xuất nghiệp vụ:</label>
-                    <select id="prop-type" onchange="toggleProposalFields()" required class="w-full px-3 py-2 border rounded-lg text-sm bg-white font-semibold text-blue-700">
-                        <option value="SALARY_3P">Đề xuất điều chỉnh Lương 3P & Phụ cấp</option>
-                        <option value="CONTRACT_RENEWAL">Trình ký tái ký / Ký mới HĐLĐ</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1">Chọn nhân sự thuộc cây quản lý:</label>
-                    <select id="prop-target-emp" required class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
-                        <option value="">-- Đang nạp danh sách nhân sự cấp dưới... --</option>
-                    </select>
-                </div>
-
-                <!-- Cụm trường thông tin Lương 3P -->
-                <div id="section-salary-3p" class="space-y-3 bg-slate-50 p-4 rounded-xl border">
-                    <h4 class="font-bold text-xs text-slate-700 uppercase">Thông tin Mức Lương & Phụ cấp Đề xuất:</h4>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-600 mb-1">Lương chính đóng BHBB mới (VNĐ):</label>
-                            <input type="number" id="prop-base-salary" placeholder="VD: 15000000" class="w-full px-3 py-2 border rounded-lg text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-600 mb-1">PC Trách nhiệm mới (VNĐ):</label>
-                            <input type="number" id="prop-allowance-pos" placeholder="VD: 2000000" class="w-full px-3 py-2 border rounded-lg text-sm">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Cụm trường thông tin Trình ký HĐLĐ -->
-                <div id="section-contract" class="space-y-3 bg-slate-50 p-4 rounded-xl border hidden">
-                    <h4 class="font-bold text-xs text-slate-700 uppercase">Thông tin Trình ký Hợp đồng Lao động:</h4>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-600 mb-1">Loại HĐLĐ trình ký:</label>
-                            <select id="prop-contract-type" class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
-                                <option value="12 THÁNG">HĐLĐ XH 12 Tháng</option>
-                                <option value="36 THÁNG">HĐLĐ XH 36 Tháng</option>
-                                <option value="KHÔNG XÁC ĐỊNH THỜI HẠN">HĐLĐ Không xác định thời hạn</option>
-                                <option value="THỬ VIỆC 2 THÁNG">Hợp đồng Thử việc (2 tháng)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-600 mb-1">Ngày có hiệu lực:</label>
-                            <input type="date" id="prop-effective-date" class="w-full px-3 py-2 border rounded-lg text-sm">
-                        </div>
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1">Lý do đề xuất / Đánh giá hiệu suất:</label>
-                    <textarea id="prop-reason" rows="3" placeholder="Nhập lý do chi tiết (VD: Hoàn thành xuất sắc KPI Q1, mở rộng quy mô nhà máy...)" required class="w-full px-3 py-2 border rounded-lg text-sm"></textarea>
-                </div>
-
-                <button type="submit" class="w-full py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 text-sm">Gửi Đề Xuất Lên C&B / BOD</button>
-            </form>
-
-            <div class="flex justify-end pt-3 border-t">
-                <button onclick="closeProposalModal()" class="px-5 py-2 bg-slate-200 text-slate-700 font-semibold rounded-lg hover:bg-slate-300 text-sm">Đóng</button>
             </div>
         </div>
     </div>
