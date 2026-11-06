@@ -157,27 +157,50 @@ function switchPortal(portal) {
 }
 
 // --------------------------------------------------------------------------
-// 3. NẠP DỮ LIỆU MASTER DATA & SỬA LỖI MULTIPLE RELATIONSHIPS SUPABASE
+// 3. NẠP DỮ LIỆU MASTER DATA & MERGE LƯƠNG 3P AN TOÀN
 // --------------------------------------------------------------------------
 async function loadEmployees() {
     const tbody = document.getElementById('employees-table-body');
     if (!tbody) return;
 
     try {
-        // Chỉ định tường minh tên ràng buộc khóa ngoại (employee_contracts_employee_id_fkey)
-        const { data, error } = await _supabase
+        // Lấy danh sách hợp đồng kèm nhân sự và pháp nhân
+        const { data: contracts, error: errC } = await _supabase
             .from('employee_contracts')
             .select(`
                 *,
                 employees:employees!employee_contracts_employee_id_fkey ( * ),
-                legal_entities ( entity_code, entity_name, tax_code ),
-                salary_structures ( * )
+                legal_entities ( entity_code, entity_name, tax_code )
             `)
             .eq('is_active', true)
             .order('employee_id');
 
-        if (error) throw error;
-        window._tlgEmployees = data || [];
+        if (errC) throw errC;
+
+        // Lấy bảng cấu trúc lương 3P
+        const { data: salaries, error: errS } = await _supabase
+            .from('salary_structures')
+            .select('*');
+
+        if (errS) throw errS;
+
+        // Tạo map lương 3P theo employee_id để merge an toàn
+        const salaryMap = {};
+        if (salaries) {
+            salaries.forEach(sal => {
+                salaryMap[sal.employee_id] = sal;
+            });
+        }
+
+        // Kết hợp dữ liệu
+        window._tlgEmployees = (contracts || []).map(contract => {
+            const empId = contract.employee_id;
+            return {
+                ...contract,
+                salary_structures: salaryMap[empId] ? [salaryMap[empId]] : []
+            };
+        });
+
         renderEmployeesTable(window._tlgEmployees);
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-rose-500">Lỗi tải Master Data: ${err.message}</td></tr>`;
