@@ -1,5 +1,5 @@
 // ==========================================================================
-// TLG HRM - FULL APPLICATION LOGIC & MASTER DATA MANAGEMENT
+// TLG HRM - MODULE 1: QUẢN LÝ HỒ SƠ NHÂN SỰ & HỢP ĐỒNG LAO ĐỘNG
 // ==========================================================================
 
 window._tlgSession = null;
@@ -43,14 +43,12 @@ async function handleLogin(event) {
             return;
         }
 
-        // Thiết lập Session đăng nhập
         window._tlgSession = {
             employeeId: user.employee_id,
             fullName: user.employees?.full_name || 'N/A',
             role: user.role_type // 'ESS', 'MSS_MANAGER', 'CB_ADMIN', 'SYSTEM_ADMIN'
         };
 
-        // Chuyển đổi màn hình
         document.getElementById('login-screen').classList.add('hidden');
         document.getElementById('app-container').classList.remove('hidden');
 
@@ -157,14 +155,14 @@ function switchPortal(portal) {
 }
 
 // --------------------------------------------------------------------------
-// 3. NẠP DỮ LIỆU MASTER DATA & MERGE LƯƠNG 3P AN TOÀN
+// 3. MỤC 1: QUẢN LÝ DỮ LIỆU HỒ SƠ NHÂN SỰ & HỢP ĐỒNG LAO ĐỘNG
 // --------------------------------------------------------------------------
 async function loadEmployees() {
     const tbody = document.getElementById('employees-table-body');
     if (!tbody) return;
 
     try {
-        // Lấy danh sách hợp đồng kèm nhân sự và pháp nhân
+        // Truy vấn Hợp đồng lao động kèm Thông tin Nhân sự & Pháp nhân
         const { data: contracts, error: errC } = await _supabase
             .from('employee_contracts')
             .select(`
@@ -177,14 +175,13 @@ async function loadEmployees() {
 
         if (errC) throw errC;
 
-        // Lấy bảng cấu trúc lương 3P
+        // Truy vấn Cơ cấu Lương 3P
         const { data: salaries, error: errS } = await _supabase
             .from('salary_structures')
             .select('*');
 
         if (errS) throw errS;
 
-        // Tạo map lương 3P theo employee_id để merge an toàn
         const salaryMap = {};
         if (salaries) {
             salaries.forEach(sal => {
@@ -192,7 +189,6 @@ async function loadEmployees() {
             });
         }
 
-        // Kết hợp dữ liệu
         window._tlgEmployees = (contracts || []).map(contract => {
             const empId = contract.employee_id;
             return {
@@ -201,10 +197,37 @@ async function loadEmployees() {
             };
         });
 
+        // Tính toán chỉ số thống kê vòng đời Hợp đồng
+        updateContractStatistics(window._tlgEmployees);
         renderEmployeesTable(window._tlgEmployees);
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-rose-500">Lỗi tải Master Data: ${err.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-rose-500">Lỗi tải dữ liệu Hồ sơ & HĐLĐ: ${err.message}</td></tr>`;
     }
+}
+
+function updateContractStatistics(data) {
+    const total = data.length;
+    let expiring = 0;
+    let indefinite = 0;
+
+    const today = new Date();
+
+    data.forEach(item => {
+        if (item.contract_type === 'Không xác định thời hạn') {
+            indefinite++;
+        }
+        if (item.end_date) {
+            const endDate = new Date(item.end_date);
+            const diffDays = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+            if (diffDays >= 0 && diffDays <= 30) {
+                expiring++;
+            }
+        }
+    });
+
+    if (document.getElementById('stat-total-contracts')) document.getElementById('stat-total-contracts').innerText = total;
+    if (document.getElementById('stat-expiring-contracts')) document.getElementById('stat-expiring-contracts').innerText = expiring;
+    if (document.getElementById('stat-indefinite-contracts')) document.getElementById('stat-indefinite-contracts').innerText = indefinite;
 }
 
 function renderEmployeesTable(data) {
@@ -212,84 +235,153 @@ function renderEmployeesTable(data) {
     if (!tbody) return;
 
     if (data && data.length > 0) {
+        const today = new Date();
         tbody.innerHTML = data.map((item) => {
             const originalIndex = window._tlgEmployees.findIndex(e => e.contract_id === item.contract_id);
+            
+            // Tính số ngày còn lại của Hợp đồng
+            let contractBadge = '<span class="px-2 py-1 bg-slate-100 text-slate-700 rounded text-xs font-semibold">Vô thời hạn</span>';
+            if (item.end_date) {
+                const endDate = new Date(item.end_date);
+                const diffDays = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+                if (diffDays < 0) {
+                    contractBadge = `<span class="px-2 py-1 bg-rose-100 text-rose-700 rounded text-xs font-bold">Đã hết hạn (${formatDateVN(item.end_date)})</span>`;
+                } else if (diffDays <= 30) {
+                    contractBadge = `<span class="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs font-bold animate-pulse">Còn ${diffDays} ngày (Hết hạn ${formatDateVN(item.end_date)})</span>`;
+                } else {
+                    contractBadge = `<span class="px-2 py-1 bg-emerald-100 text-emerald-800 rounded text-xs font-semibold">Hạn đến ${formatDateVN(item.end_date)}</span>`;
+                }
+            }
+
             return `
-                <tr class="border-b hover:bg-slate-50">
+                <tr class="border-b hover:bg-slate-50 text-sm">
                     <td class="p-3 font-mono font-bold text-blue-600">${item.employees?.employee_id || 'N/A'}</td>
-                    <td class="p-3 font-medium text-slate-800">${item.employees?.full_name || 'N/A'}</td>
-                    <td class="p-3"><span class="px-2 py-1 bg-slate-100 text-slate-700 rounded font-bold text-xs">${item.legal_entities?.entity_code || 'N/A'}</span></td>
-                    <td class="p-3 text-slate-700">${item.job_title || 'N/A'}</td>
-                    <td class="p-3 text-slate-600">${item.department_name || 'N/A'}</td>
+                    <td class="p-3 font-semibold text-slate-800">${item.employees?.full_name || 'N/A'}</td>
                     <td class="p-3">
-                        <button onclick="viewEmployeeDetail(${originalIndex})" class="px-3 py-1 bg-blue-50 text-blue-600 rounded font-semibold hover:bg-blue-100 text-xs">Xem Chi Tiết & Lương 3P</button>
+                        <span class="px-2 py-0.5 bg-blue-50 text-blue-700 font-bold rounded text-xs border border-blue-200">
+                            ${item.legal_entities?.entity_code || 'N/A'}
+                        </span>
+                    </td>
+                    <td class="p-3">
+                        <div class="font-medium text-slate-800">${item.contract_number || 'N/A'}</div>
+                        <div class="text-[11px] text-slate-500">${item.contract_type || 'N/A'}</div>
+                    </td>
+                    <td class="p-3">
+                        <div class="text-slate-800 font-medium">${item.job_title || 'N/A'}</div>
+                        <div class="text-[11px] text-slate-500">${item.department_name || 'N/A'}</div>
+                    </td>
+                    <td class="p-3">${contractBadge}</td>
+                    <td class="p-3">
+                        <button onclick="viewEmployeeDetail(${originalIndex})" class="px-3 py-1 bg-blue-600 text-white rounded font-semibold hover:bg-blue-700 text-xs shadow-sm">
+                            Hồ sơ & 3P
+                        </button>
                     </td>
                 </tr>
             `;
         }).join('');
     } else {
-        tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">Không tìm thấy nhân sự phù hợp với điều kiện lọc.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-slate-400">Không tìm thấy hồ sơ nhân sự nào phù hợp với bộ lọc.</td></tr>';
     }
 }
 
 // --------------------------------------------------------------------------
-// 4. BỘ LỌC ĐIỀU KIỆN ĐA CHIỀU (LOGICAL AND / OR)
+// 4. BỘ LỌC ĐA CHIỀU MỤC 1 (NHÂN SỰ & HỢP ĐỒNG)
 // --------------------------------------------------------------------------
 function applyAdvancedFilter() {
     if (!window._tlgEmployees) return;
 
-    const keywordInput = document.getElementById('adv-keyword');
-    const entityInput = document.getElementById('adv-entity');
-    const operatorInput = document.getElementById('adv-operator');
-    const deptInput = document.getElementById('adv-department');
-
-    const keyword = keywordInput ? keywordInput.value.toLowerCase().trim() : '';
-    const selectedEntity = entityInput ? entityInput.value : '';
-    const operator = operatorInput ? operatorInput.value : 'AND';
-    const deptKeyword = deptInput ? deptInput.value.toLowerCase().trim() : '';
+    const keyword = (document.getElementById('adv-keyword')?.value || '').toLowerCase().trim();
+    const selectedEntity = document.getElementById('adv-entity')?.value || '';
+    const contractType = document.getElementById('adv-contract-type')?.value || '';
+    const deptKeyword = (document.getElementById('adv-department')?.value || '').toLowerCase().trim();
 
     const filtered = window._tlgEmployees.filter(item => {
         const empId = (item.employees?.employee_id || '').toLowerCase();
         const fullName = (item.employees?.full_name || '').toLowerCase();
         const entityCode = item.legal_entities?.entity_code || '';
+        const itemContractType = item.contract_type || '';
         const deptName = (item.department_name || '').toLowerCase();
 
         const matchKeyword = (keyword === '' || empId.includes(keyword) || fullName.includes(keyword));
         const matchEntity = (selectedEntity === '' || entityCode === selectedEntity);
+        const matchContract = (contractType === '' || itemContractType === contractType);
         const matchDept = (deptKeyword === '' || deptName.includes(deptKeyword));
 
-        if (keyword === '' && selectedEntity === '' && deptKeyword === '') {
-            return true;
-        }
-
-        if (operator === 'AND') {
-            let pass = true;
-            if (keyword !== '' && !matchKeyword) pass = false;
-            if (selectedEntity !== '' && !matchEntity) pass = false;
-            if (deptKeyword !== '' && !matchDept) pass = false;
-            return pass;
-        } else {
-            let pass = false;
-            if (keyword !== '' && matchKeyword) pass = true;
-            if (selectedEntity !== '' && matchEntity) pass = true;
-            if (deptKeyword !== '' && matchDept) pass = true;
-            return pass;
-        }
+        return matchKeyword && matchEntity && matchContract && matchDept;
     });
 
     renderEmployeesTable(filtered);
 }
 
-function resetAdvancedFilter() {
-    if (document.getElementById('adv-keyword')) document.getElementById('adv-keyword').value = '';
-    if (document.getElementById('adv-entity')) document.getElementById('adv-entity').value = '';
-    if (document.getElementById('adv-operator')) document.getElementById('adv-operator').value = 'AND';
-    if (document.getElementById('adv-department')) document.getElementById('adv-department').value = '';
-    renderEmployeesTable(window._tlgEmployees);
+// --------------------------------------------------------------------------
+// 5. THAO TÁC MỤC 1: TẠO HỢP ĐỒNG / GIA HẠN HĐLĐ MỚI
+// --------------------------------------------------------------------------
+function openCreateContractModal() {
+    document.getElementById('create-contract-modal').classList.remove('hidden');
+}
+
+function closeCreateContractModal() {
+    document.getElementById('create-contract-modal').classList.add('hidden');
+    document.getElementById('create-contract-form').reset();
+}
+
+async function handleSaveContract(event) {
+    event.preventDefault();
+    const empId = document.getElementById('contract-emp-id').value.trim();
+    const entityCode = document.getElementById('contract-entity-code').value;
+    const contractNum = document.getElementById('contract-number').value.trim();
+    const contractType = document.getElementById('contract-type').value;
+    const startDate = document.getElementById('contract-start-date').value;
+    const endDate = document.getElementById('contract-end-date').value || null;
+    const jobTitle = document.getElementById('contract-job-title').value.trim();
+    const department = document.getElementById('contract-department').value.trim();
+
+    try {
+        // 1. Kiểm tra tồn tại nhân sự
+        const { data: emp, error: empErr } = await _supabase
+            .from('employees')
+            .select('employee_id')
+            .eq('employee_id', empId)
+            .single();
+
+        if (empErr || !emp) {
+            alert(`Mã nhân viên ${empId} chưa tồn tại trong Hồ sơ gốc! Hãy nhập Excel hoặc tạo nhân sự trước.`);
+            return;
+        }
+
+        // 2. Chuyển hợp đồng cũ sang không còn hiệu lực
+        await _supabase
+            .from('employee_contracts')
+            .update({ is_active: false })
+            .eq('employee_id', empId);
+
+        // 3. Tạo Hợp đồng mới
+        const { error: insErr } = await _supabase
+            .from('employee_contracts')
+            .insert({
+                employee_id: empId,
+                entity_code: entityCode,
+                contract_number: contractNum,
+                contract_type: contractType,
+                start_date: startDate,
+                end_date: endDate,
+                job_title: jobTitle,
+                department_name: department,
+                is_active: true
+            });
+
+        if (insErr) throw insErr;
+
+        alert('Lưu Hợp đồng Lao động thành công!');
+        closeCreateContractModal();
+        loadEmployees();
+    } catch (err) {
+        alert('Lỗi lưu hợp đồng: ' + err.message);
+    }
 }
 
 // --------------------------------------------------------------------------
-// 5. HIỂN THỊ CHI TIẾT HỒ SƠ & CẤU TRÚC LƯƠNG 3P THEO FILE EXCEL
+// 6. HIỂN THỊ CHI TIẾT HỒ SƠ & CẤU TRÚC LƯƠNG 3P THEO FILE EXCEL
 // --------------------------------------------------------------------------
 function viewEmployeeDetail(index) {
     const item = window._tlgEmployees[index];
@@ -321,7 +413,7 @@ function viewEmployeeDetail(index) {
     if (content) {
         content.innerHTML = `
             <div>
-                <h4 class="font-bold text-slate-700 mb-2 border-b pb-1 text-sm">1. Thông Tin Định Danh & Liên Lạc</h4>
+                <h4 class="font-bold text-slate-700 mb-2 border-b pb-1 text-sm">1. Thông Tin Định Danh & Liên Lạc Nhân Sự</h4>
                 <div class="grid grid-cols-2 gap-3 text-sm">
                     <div><span class="text-slate-500">Mã NV:</span> <strong class="text-slate-800">${emp.employee_id || 'N/A'}</strong></div>
                     <div><span class="text-slate-500">Họ và tên:</span> <strong class="text-slate-800">${emp.full_name || 'N/A'}</strong></div>
@@ -330,21 +422,24 @@ function viewEmployeeDetail(index) {
                     <div><span class="text-slate-500">Email:</span> <span class="text-slate-800">${emp.email || 'N/A'}</span></div>
                     <div><span class="text-slate-500">Số CCCD:</span> <span class="text-slate-800">${emp.id_card_number || 'N/A'}</span></div>
                     <div><span class="text-slate-500">Mã số thuế cá nhân:</span> <span class="text-slate-800">${emp.tax_code || 'N/A'}</span></div>
-                    <div class="col-span-2"><span class="text-slate-500">Địa chỉ:</span> <span class="text-slate-800">${emp.permanent_address || 'N/A'}</span></div>
+                    <div class="col-span-2"><span class="text-slate-500">Địa chỉ thường trú:</span> <span class="text-slate-800">${emp.permanent_address || 'N/A'}</span></div>
                 </div>
             </div>
             <div>
-                <h4 class="font-bold text-slate-700 mb-2 border-b pb-1 text-sm">2. Quan Hệ Công Tác & Pháp Nhân</h4>
+                <h4 class="font-bold text-slate-700 mb-2 border-b pb-1 text-sm">2. Hợp Đồng Lao Động & Pháp Nhân Quản Lý</h4>
                 <div class="grid grid-cols-2 gap-3 text-sm">
-                    <div><span class="text-slate-500">Pháp nhân:</span> <strong class="text-blue-600">${item.legal_entities?.entity_name || 'N/A'}</strong></div>
-                    <div><span class="text-slate-500">Mã Số Thuế Công ty:</span> <strong class="text-emerald-700">${item.legal_entities?.tax_code || 'N/A'}</strong></div>
-                    <div><span class="text-slate-500">Số HĐLĐ:</span> <span class="text-slate-800">${item.contract_number || 'N/A'}</span></div>
-                    <div><span class="text-slate-500">Chức danh:</span> <span class="text-slate-800">${item.job_title || 'N/A'}</span></div>
-                    <div class="col-span-2"><span class="text-slate-500">Phòng ban / Xưởng:</span> <span class="text-slate-800">${item.department_name || 'N/A'}</span></div>
+                    <div><span class="text-slate-500">Pháp nhân ký HĐ:</span> <strong class="text-blue-600">${item.legal_entities?.entity_name || 'N/A'}</strong></div>
+                    <div><span class="text-slate-500">MST Pháp Nhân:</span> <strong class="text-emerald-700">${item.legal_entities?.tax_code || 'N/A'}</strong></div>
+                    <div><span class="text-slate-500">Số HĐLĐ:</span> <span class="text-slate-800 font-bold">${item.contract_number || 'N/A'}</span></div>
+                    <div><span class="text-slate-500">Loại Hợp đồng:</span> <span class="text-slate-800">${item.contract_type || 'N/A'}</span></div>
+                    <div><span class="text-slate-500">Ngày hiệu lực:</span> <span class="text-slate-800">${formatDateVN(item.start_date)}</span></div>
+                    <div><span class="text-slate-500">Ngày hết hạn:</span> <span class="text-slate-800">${formatDateVN(item.end_date)}</span></div>
+                    <div><span class="text-slate-500">Chức danh công việc:</span> <span class="text-slate-800">${item.job_title || 'N/A'}</span></div>
+                    <div><span class="text-slate-500">Phòng ban / Xưởng:</span> <span class="text-slate-800">${item.department_name || 'N/A'}</span></div>
                 </div>
             </div>
             <div>
-                <h4 class="font-bold text-slate-700 mb-2 border-b pb-1 text-sm">3. Cơ Cấu Lương & Phụ Cấp 3P Chi Tiết (Theo File Co cau luong moi.xlsx)</h4>
+                <h4 class="font-bold text-slate-700 mb-2 border-b pb-1 text-sm">3. Cơ Cấu Lương & Phụ Cấp 3P (File Co cau luong moi.xlsx)</h4>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm bg-slate-50 p-4 rounded-xl border">
                     <div class="space-y-2 md:border-r md:pr-3">
                         <p class="font-semibold text-blue-700 text-xs uppercase">Các khoản đóng BHBB (Tổng tham gia BHBB):</p>
@@ -390,7 +485,7 @@ function closeEmployeeModal() {
 }
 
 // --------------------------------------------------------------------------
-// 6. TRỢ LÝ CẢNH BÁO SMART BANNER
+// 7. TRỢ LÝ CẢNH BÁO SMART BANNER
 // --------------------------------------------------------------------------
 async function checkSmartContractAlerts() {
     try {
@@ -416,7 +511,7 @@ async function checkSmartContractAlerts() {
 }
 
 // --------------------------------------------------------------------------
-// 7. CÔNG CỤ EXPORT / IMPORT EXCEL MASTER DATA
+// 8. CÔNG CỤ EXPORT / IMPORT EXCEL MASTER DATA
 // --------------------------------------------------------------------------
 function downloadExcelTemplate() {
     const templateData = [{
@@ -564,14 +659,10 @@ function importMasterDataExcel(event) {
 }
 
 // --------------------------------------------------------------------------
-// 8. MSS LEAVE REQUESTS & PROPOSALS PLACEHOLDER
+// 9. MSS PROPOSALS PLACEHOLDER
 // --------------------------------------------------------------------------
 async function loadMSSProposals() {
     const tbody = document.getElementById('mss-proposals-body');
     if (!tbody || !window._tlgSession) return;
     tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-slate-400">Đang tải danh sách đề xuất...</td></tr>';
 }
-
-document.addEventListener('DOMContentLoaded', () => {
-    // Sẵn sàng nhận sự kiện người dùng
-});
